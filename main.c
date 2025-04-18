@@ -4,6 +4,7 @@
 #include <regex.h>
 #include <stdio.h>
 #include <errno.h>
+#include <stdlib.h>
 
 #define DEFAULT_PORT 0
 #define ARGOPT_BIND_ADDRESS 'b'
@@ -18,7 +19,7 @@ typedef struct ProgramArgs {
     uint16_t peer_port;
 } ProgramArgs;
 
-ProgramArgs default_program_args() {
+ProgramArgs args_default() {
     return (ProgramArgs) {
         .bind_address = NULL,
         .port = DEFAULT_PORT,
@@ -60,7 +61,7 @@ uint16_t read_port(char const *string) {
 }
 
 // TODO Komentarz.
-void load_arg_value(char const *arg, const char opt, ProgramArgs *program_args) {
+void args_load_value(char *arg, const char opt, ProgramArgs *program_args) {
     switch (opt) {
         case ARGOPT_BIND_ADDRESS:
             program_args->bind_address = arg;
@@ -84,33 +85,56 @@ void load_arg_value(char const *arg, const char opt, ProgramArgs *program_args) 
 }
 
 // TODO Komentarz.
-void parse_args(int argc, char* argv[], ProgramArgs *program_args) {
+void args_parse(int argc, char* argv[], ProgramArgs *program_args) {
+    if (argc-1 % 2 == 1) syserr("Incorrect arguments: odd number..."); // TODO Better message. But should we even consider it an error?
+    
     regex_t argopt_regex = argument_option_regex();
 
     // FIXME: Ewentualnie można zamienić na sprawdzanie parzystości i.
     bool option = true; // Tells, whether a flag an option, i.e. "-b" is required.
     char opt;
+    // int ar = 0; // TODO Lepsza nazwa.
+    bool a = false, r = false;
 
     for (int i = 1; i < argc; ++i) {
         if (option) {
             if (regexec(&argopt_regex, argv[i], 0, NULL, 0) != 0) {
-                syserr("Wrong parameters!");
+                syserr("Wrong parameters!"); // TODO Print usage.
             } else {
                 opt = argv[i][1];
             }
         } else {
-            load_arg_value(argv[i], opt, program_args);
+            args_load_value(argv[i], opt, program_args);
+            if (opt == ARGOPT_PEER_ADDRESS) {
+                a = true;
+            } else if (opt == ARGOPT_PEER_PORT) {
+                r = true;
+            }
         }
 
         option = !option;
     }
 
     regfree(&argopt_regex);
+    if (a != r) syserr("-a and -r not provided both."); // TODO Better message.
+}
+
+/**
+ * Passed by pointer to print accurate address.
+ */
+void args_print(ProgramArgs *args) {
+    fprintf(stderr, "ProgramArgs:\n");
+    fprintf(stderr, "  Bind Address: %s\n", args->bind_address ? args->bind_address : "NULL");
+    fprintf(stderr, "  Port: %u\n", args->port);
+    fprintf(stderr, "  Peer Address: %s\n", args->peer_address ? args->peer_address : "NULL");
+    fprintf(stderr, "  Peer Port: %u\n", args->peer_port);
 }
 
 int main(int argc, char* argv[]) {
-    ProgramArgs program_args = default_program_args();
-    parse_args(argc, argc, &program_args);
+    ProgramArgs program_args = args_default();
+    args_parse(argc, argv, &program_args);
+    args_print(&program_args);
+    args_print(&program_args);
 
     return 0;
 }

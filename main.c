@@ -37,6 +37,12 @@
 
 #define MAX_DATA 65535 // TODO lepsza nazwa
 
+// TODO: Skopiować mimową bibliotekę errorową. Czy można?
+void syserr(const char *msg) {
+    fprintf(stderr, "%s\n", msg);
+    exit(1);
+}
+
 typedef struct __attribute__((__packed__)) {
     uint8_t     peer_address_length;
     uint8_t     peer_address[16];
@@ -47,6 +53,17 @@ Peer peer_init() {
     Peer p;
     memset(&p, 0, sizeof(Peer));
     return p;
+}
+
+void peer_print(Peer *p) {
+    fprintf(stderr, "Peer %p:\n", (void*) p);
+    fprintf(stderr, "  Address Length: %u\n", p->peer_address_length);
+    fprintf(stderr, "  Address: ");
+    for (uint8_t i = 0; i < p->peer_address_length; ++i) {
+        fprintf(stderr, "%s%u", (i > 0 ? "." : ""), p->peer_address[i]);
+    }
+    fprintf(stderr, "\n");
+    fprintf(stderr, "  Port: %u\n", p->peer_port);
 }
 
 void peer_convert_to_network(Peer *p) {
@@ -65,17 +82,22 @@ static Peer*    g_peers; // Known peer nodes.
 static uint16_t g_count; // Number of known peer nodes
 static size_t   g_peers_capacity; // `g_peers` capacity
 
+void peer_add(Peer *p) {
+    // TODO dodać warunki na max g_count ze względu na uint8_t
+    if (g_count + 1 == g_peers_capacity) {
+        g_peers_capacity = g_peers_capacity << 1; 
+        g_peers = (Peer *) realloc(g_peers, g_peers_capacity);
+        if (g_peers == NULL) syserr("realloc");
+    }
+
+    g_peers[g_count++] = p;
+}
+
 void init_global() {
     g_count = 0;
     g_peers_capacity = 1;
     g_peers = (Peer*) malloc(g_peers_capacity * sizeof(Peer));
     // TODO sprawdź, czy alokacja się powiodła
-}
-
-// TODO: Skopiować mimową bibliotekę errorową. Czy można?
-void syserr(const char *msg) {
-    fprintf(stderr, "%s\n", msg);
-    exit(1);
 }
 
 uint32_t get_address(const char *addr) {
@@ -118,7 +140,7 @@ void init_socket(struct sockaddr_in *bind_address, const char *addr, const uint1
 /**
  * Zajumane z labów udp: funkcja `get_server_address`.
  */
-static struct sockaddr_in get_peer_address(char const *peer, uint16_t port) {
+static struct sockaddr_in get_peer_address(char const *peer_ip_str, uint16_t port) {
     struct addrinfo hints;
     memset(&hints, 0, sizeof(struct addrinfo));
     hints.ai_family = AF_INET;
@@ -126,7 +148,7 @@ static struct sockaddr_in get_peer_address(char const *peer, uint16_t port) {
     hints.ai_protocol = IPPROTO_UDP;
 
     struct addrinfo *address_result;
-    int errcode = getaddrinfo(peer, NULL, &hints, &address_result);
+    int errcode = getaddrinfo(peer_ip_str, NULL, &hints, &address_result);
     if (errcode != 0) {
         syserr("getaddrinfo"); // OG: `fatal("getaddrinfo: %s", gai_strerror(errcode));`
     }
@@ -277,6 +299,21 @@ typedef struct __attribute__((__packed__)) {
     uint8_t     synchronized;
 } Message;
 
+void msg_print(const Message *msg) {
+    fprintf(stderr, "Message %p:\n", (void*) msg);
+    fprintf(stderr, "  Type: %u\n", msg->message);
+    fprintf(stderr, "  Count: %u\n", msg->count);
+    fprintf(stderr, "  Peer Address Length: %u\n", msg->peer_address_length);
+    fprintf(stderr, "  Peer Address: ");
+    for (uint8_t i = 0; i < msg->peer_address_length; ++i) {
+        fprintf(stderr, "%s%u", (i > 0 ? "." : ""), msg->peer_address[i]);
+    }
+    fprintf(stderr, "\n");
+    fprintf(stderr, "  Peer Port: %u\n", msg->peer_port);
+    fprintf(stderr, "  Timestamp: %" PRIu64 "\n", msg->timestamp);
+    fprintf(stderr, "  Synchronized: %u\n", msg->synchronized);
+}
+
 Message msg_init() {
     Message msg;
     memset(&msg, 0, sizeof(Message));
@@ -363,13 +400,15 @@ void reply(struct sockaddr_in *peer_address) {
                               (struct sockaddr *) peer_address, addr_len);
     if (send_len < 0) syserr("sendto HELLO REPLY");
     
+    fprintf(stderr, "Sent HELLO_REPLY message (%zd bytes)\n", send_len);
+    msg_print(&msg);
     free(buf);
 }
 
 uint8_t receive_reply(struct sockaddr_in *peer_address, Peer **peers) {
     uint8_t buf[MAX_DATA];
     Message msg;
-    socklen_t addr_len;
+    socklen_t addr_len = (socklen_t) sizeof(*peer_address);
 
     // Receive HELLO REPLY message.
     ssize_t recv_len = recvfrom(g_socket_fd, buf, sizeof(buf), 0,
@@ -380,6 +419,7 @@ uint8_t receive_reply(struct sockaddr_in *peer_address, Peer **peers) {
     memcpy(&msg, buf, sizeof(Message));
     msg_convert_to_host(&msg);
     if (msg.message != MSG_HELLO_REPLY) syserr("Received not reply? WTH?");
+    fprintf(stderr, "Received HELLO_REPLY message (%zd bytes)\n", recv_len);
 
     // Copy contents of peers
     if (msg.count > 0) {
@@ -387,8 +427,10 @@ uint8_t receive_reply(struct sockaddr_in *peer_address, Peer **peers) {
         if (*peers == NULL) syserr("malloc failed");
         memcpy(*peers, buf + sizeof(Message), msg.count);
 
+        fprintf(stderr, "Peers from HELLO_REPLY:\n");
         for (size_t i = 0; i < msg.count; ++i) {
             peer_convert_to_host(&(*peers)[i]);
+            peer_print((*peers)[i]);
         }
     }
 
@@ -399,76 +441,70 @@ void send_connect(struct sockaddr_in *peer_address) {
     Message msg = msg_connect();
     ssize_t send_len = msg_send(&msg, peer_address);
     if (send_len < 0) syserr("sendto CONNECT");
+    fprintf(stderr, "Sent CONNECT message (%zd bytes)\n", send_len);
 }
 
 void acknowledge_connection(struct sockaddr_in *peer_address) {
     Message = msg_acknowledge_connection();
     ssize_t send_len = msg_send(&msg, peer_address);
     if (send_len < 0) syserr("sendto ACK CONNECT");
+    fprintf(stderr, "Sent ACK_CONNECT message (%zd bytes)\n", send_len);
 }
 
 void join_network(ProgramArgs args) {
-    if (args._ar_provided) {
-        struct sockaddr_in peer_address = get_peer_address(args.peer_address, args.peer_port);
-        Peer *peers = NULL;
+    if (!args._ar_provided) return;
 
-        notify_peer(&peer_address);
-        uint8_t count = receive_reply(&peer_address, &peers);
+    struct sockaddr_in peer_address = get_peer_address(args.peer_address, args.peer_port);
+    Peer *peers = NULL;
 
-        for (uint8_t i = 0; i < count; ++i) {
-            Peer p = peers[i];
-            if (p.peer_address_length != IPV4_ADDR_LEN) syserr("Wrong address");
+    notify_peer(&peer_address);
+    uint8_t count = receive_reply(&peer_address, &peers);
 
-            // FIXME PORZĄDEK!
-            // TODO nie da sie sprytniej?
-            char ip_str[INET_ADDRSTRLEN];
-            if (inet_ntop(AF_INET, p.peer_address, ip_str, INET_ADDRSTRLEN) == NULL) {
-                syserr("inet_ntop failed");
-            }
+    for (uint8_t i = 0; i < count; ++i) {
+        Peer p = peers[i];
+        if (p.peer_address_length != IPV4_ADDR_LEN) syserr("Wrong address");
 
-            peer_address = get_peer_address(ip_str, p.peer_port);
-            send_connect(&peer_address);
+        // FIXME PORZĄDEK!
+
+        // TODO nie da sie sprytniej?
+        char peer_ip_str[INET_ADDRSTRLEN];
+        if (inet_ntop(AF_INET, p.peer_address, peer_ip_str, INET_ADDRSTRLEN) == NULL) {
+            syserr("inet_ntop failed");
         }
 
-        // TODO Czy tutaj jest możliwość, że otrzymam jakąś inną wiadomość niż ACK_CONNECT? Hipoteza: tak.
-        for (uint8_t i = 0; i < count; ++i) {
-            uint8_t buf[MAX_DATA];
-            Message msg;
-            socklen_t addr_len;
-        
-            // FIXME PORZĄDEK!
-            // Receive HELLO REPLY message.
-            ssize_t recv_len = recvfrom(g_socket_fd, buf, sizeof(buf), 0,
-                                        (struct sockaddr *) peer_address, &addr_len);
-            if (recv_len < 0) syserr("recvfrom ACK_CONECT");
-            if (addr_len != IPV4_ADDR_LEN) syserr("Wrong peer address length");
+        peer_address = get_peer_address(peer_ip_str, p.peer_port);
+        send_connect(&peer_address);
+    }
 
-            char ip_str[INET_ADDRSTRLEN];
-            if (inet_ntop(AF_INET, &peer_address->sin_addr, ip_str, INET_ADDRSTRLEN) == NULL) {
-                syserr("inet_ntop");
-            }
-            uint16_t port = ntohs(peer_address->sin_port);
-        
-            // Deserialize Message structure.
-            memcpy(&msg, buf, sizeof(Message));
-            msg_convert_to_host(&msg);
-            if (msg.message != MSG_HELLO_REPLY) syserr("Received not ACK_CONNECT!");
-
-
-        }
-
-        // TODO
-
-        // for (address in reply.peer_address) {
-        //     connect with address:reply.peer_port; // with msg_connect
-        // }
+    // TODO Czy tutaj jest możliwość, że otrzymam jakąś inną wiadomość niż ACK_CONNECT? Hipoteza: tak.
+    for (uint8_t i = 0; i < count; ++i) {
+        uint8_t buf[MAX_DATA];
+        Message msg;
+        socklen_t addr_len = (socklen_t) sizeof(*peer_address);
     
-        // for (address in reply.peer_address) {
-        //     receive msg_ack_connect;
-        //     dodaj do listy wezlow potwierdzony wezel;
-        // }
-    } else {
-        // Nasłuchuj komunikatów.
+        // Receive HELLO REPLY message.
+        ssize_t recv_len = recvfrom(g_socket_fd, buf, sizeof(buf), 0,
+                                    (struct sockaddr *) peer_address, &addr_len);
+        if (recv_len < 0) syserr("recvfrom ACK_CONECT");
+
+        uint8_t ip[16];
+        memset(ip, 0, sizeof(ip));
+        memcpy(ip, &peer_address->sin_addr, IPV4_ADDR_LEN);
+        uint16_t port = ntohs(peer_address->sin_port);
+    
+        // Deserialize Message structure.
+        memcpy(&msg, buf, sizeof(Message));
+        msg_convert_to_host(&msg);
+        if (msg.message != MSG_HELLO_REPLY) syserr("Received not ACK_CONNECT!");
+
+        Peer *p = (Peer *) malloc(sizeof(Peer));
+        if (p == NULL) syserr("malloc failed");
+
+        p->peer_address_length = IPV4_ADDR_LEN;
+        memcpy(p->peer_address, ip, IPV4_ADDR_LEN)
+        p->peer_port = port;
+        
+        peer_add(p);
     }
 }
 

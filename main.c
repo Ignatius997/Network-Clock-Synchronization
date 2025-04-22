@@ -33,10 +33,44 @@
 #define MSG_GET_TIME 31
 #define MSG_TIME     32
 
+#define IPV4_ADDR_LEN 4
+
+#define MAX_DATA 65535 // TODO lepsza nazwa
+
+typedef struct __attribute__((__packed__)) {
+    uint8_t     peer_address_length;
+    uint8_t     peer_address[16];
+    uint16_t    peer_port;
+} Peer;
+
+Peer peer_init() {
+    Peer p;
+    memset(&p, 0, sizeof(Peer));
+    return p;
+}
+
+void peer_convert_to_network(Peer *p) {
+    p->peer_port = htons(p->peer_port);
+}
+
+void peer_convert_to_host(Peer *p) {
+    p->peer_port = ntohs(p->peer_port);
+}
+
 /** Node attributes shall be accessible via global variables.
  * Naming convention: g_{name}.
  */
-static int g_socket_fd;
+static int      g_socket_fd;
+static Peer*    g_peers; // Known peer nodes.
+static uint16_t g_count; // Number of known peer nodes
+static size_t   g_peers_capacity; // `g_peers` capacity
+
+void init_global() {
+    g_count = 0;
+    g_peers_capacity = 1;
+    g_peers = (Peer*) malloc(g_peers_capacity * sizeof(Peer));
+    // TODO sprawdź, czy alokacja się powiodła
+}
 
 // TODO: Skopiować mimową bibliotekę errorową. Czy można?
 void syserr(const char *msg) {
@@ -237,13 +271,11 @@ typedef struct __attribute__((__packed__)) {
     uint8_t     message; // message type
     uint16_t    count; // count of known nodes
     uint8_t     peer_address_length; // number of octets in `peer_address`
-    uint8_t     *peer_address; // node IP address
+    uint8_t     peer_address[16]; // node IP address
     uint16_t    peer_port;
     uint64_t    timestamp;
     uint8_t     synchronized;
 } Message;
-
-// FIXME PRIORYTET 1: O CO CHODZI Z TRZECIM I CZWARTYM POLEM?
 
 Message msg_init() {
     Message msg;
@@ -269,49 +301,164 @@ Message msg_hello() {
     return msg;
 }
 
-inline Message msg_hello_reply() {
-
+Message msg_hello_reply() {
+    Message msg = msg_init();
+    msg.message = MSG_HELLO_REPLY;
+    msg.count = g_count;
+    return msg;
 }
 
 inline Message msg_connect() {
-
+    Message msg = msg_init();
+    msg.message = MSG_CONNECT;
+    return msg;
 }
 
-inline Message msg_acknowledge_connect() {
+inline Message msg_acknowledge_connection() {
+    Message msg = msg_init();
+    msg.message = MSG_ACK_CONNECT;
+    return msg;
+}
 
+// TODO te całe wysyłanie możnaby jakoś ujednolicić.
+// TODO dodać to cale oczekiwanie od 5 do 10 sekund
+
+int msg_send(Message *msg, const struct sockaddr_in *peer_address) {
+    msg_convert_to_network(msg);
+    socklen_t addr_len = (socklen_t) sizeof(*peer_address);
+    return sendto(g_socket_fd, msg, sizeof(msg), 0,
+                  (struct sockaddr *) peer_address, addr_len);
 }
 
 void notify_peer(struct sockaddr_in *peer_address) {
     Message msg = msg_hello();
-    msg_convert_to_network(&msg);
-    
-    socklen_t addr_len = (socklen_t) sizeof(*peer_address);
-
-    ssize_t send_len = sendto(g_socket_fd, &msg, sizeof(msg), 0,
-                          (struct sockaddr *) peer_address, addr_len);
+    ssize_t send_len = msg_send(&msg, peer_address);
     if (send_len < 0) syserr("sendto HELLO");
 }
 
-void receive_reply(struct sockaddr_in *peer_address) {
+// TODO czy mozna sensownie ujednolicic wysylanie, aby to tez mozna bylo dac do funkcji `msg_send`?
+void reply(struct sockaddr_in *peer_address) {
+    Message msg = msg_hello_reply();
+    msg_convert_to_network(&msg);
+
+    size_t msg_size = sizeof(Message);
+    size_t peers_size = g_count * sizeof(Peer);
+    size_t total_size = msg_size + peers_size;
+
+    uint8_t *buf = (uint8_t*) malloc(total_size);
+    if (buf == NULL) syserr("malloc");
+
+    memcpy(buf, &msg, msg_size);
+    memcpy(buf + msg_size, g_peers, peers_size);
+    
+    size_t offset = sizeof(Message);
+    for (size_t i = 0; i < g_count; ++i) {
+        Peer *p = (Peer *) (buf + offset);
+        p->peer_port = htons(node->peer_port);
+        offset += sizeof(Peer);
+    }
+
+    socklen_t addr_len = (socklen_t) sizeof(*peer_address);
+    ssize_t send_len = sendto(g_socket_fd, buf, total_size, 0,
+                              (struct sockaddr *) peer_address, addr_len);
+    if (send_len < 0) syserr("sendto HELLO REPLY");
+    
+    free(buf);
+}
+
+uint8_t receive_reply(struct sockaddr_in *peer_address, Peer **peers) {
+    uint8_t buf[MAX_DATA];
     Message msg;
     socklen_t addr_len;
 
-    ssize_t recv_len = recvfrom(g_socket_fd, &msg, sizeof(msg), 0,
+    // Receive HELLO REPLY message.
+    ssize_t recv_len = recvfrom(g_socket_fd, buf, sizeof(buf), 0,
                                 (struct sockaddr *) peer_address, &addr_len);
     if (recv_len < 0) syserr("recvfrom HELLO_REPLY");
-    msg_convert_to_host(&msg);
 
+    // Deserialize Message structure.
+    memcpy(&msg, buf, sizeof(Message));
+    msg_convert_to_host(&msg);
     if (msg.message != MSG_HELLO_REPLY) syserr("Received not reply? WTH?");
+
+    // Copy contents of peers
+    if (msg.count > 0) {
+        **peers = malloc(msg.count * sizoef(Peer));
+        if (*peers == NULL) syserr("malloc failed");
+        memcpy(*peers, buf + sizeof(Message), msg.count);
+
+        for (size_t i = 0; i < msg.count; ++i) {
+            peer_convert_to_host(&(*peers)[i]);
+        }
+    }
+
+    return msg.count;
+}
+
+void send_connect(struct sockaddr_in *peer_address) {
+    Message msg = msg_connect();
+    ssize_t send_len = msg_send(&msg, peer_address);
+    if (send_len < 0) syserr("sendto CONNECT");
+}
+
+void acknowledge_connection(struct sockaddr_in *peer_address) {
+    Message = msg_acknowledge_connection();
+    ssize_t send_len = msg_send(&msg, peer_address);
+    if (send_len < 0) syserr("sendto ACK CONNECT");
 }
 
 void join_network(ProgramArgs args) {
     if (args._ar_provided) {
         struct sockaddr_in peer_address = get_peer_address(args.peer_address, args.peer_port);
-        
+        Peer *peers = NULL;
+
         notify_peer(&peer_address);
-        receive_reply(&peer_address);
+        uint8_t count = receive_reply(&peer_address, &peers);
+
+        for (uint8_t i = 0; i < count; ++i) {
+            Peer p = peers[i];
+            if (p.peer_address_length != IPV4_ADDR_LEN) syserr("Wrong address");
+
+            // FIXME PORZĄDEK!
+            // TODO nie da sie sprytniej?
+            char ip_str[INET_ADDRSTRLEN];
+            if (inet_ntop(AF_INET, p.peer_address, ip_str, INET_ADDRSTRLEN) == NULL) {
+                syserr("inet_ntop failed");
+            }
+
+            peer_address = get_peer_address(ip_str, p.peer_port);
+            send_connect(&peer_address);
+        }
+
+        // TODO Czy tutaj jest możliwość, że otrzymam jakąś inną wiadomość niż ACK_CONNECT? Hipoteza: tak.
+        for (uint8_t i = 0; i < count; ++i) {
+            uint8_t buf[MAX_DATA];
+            Message msg;
+            socklen_t addr_len;
+        
+            // FIXME PORZĄDEK!
+            // Receive HELLO REPLY message.
+            ssize_t recv_len = recvfrom(g_socket_fd, buf, sizeof(buf), 0,
+                                        (struct sockaddr *) peer_address, &addr_len);
+            if (recv_len < 0) syserr("recvfrom ACK_CONECT");
+            if (addr_len != IPV4_ADDR_LEN) syserr("Wrong peer address length");
+
+            char ip_str[INET_ADDRSTRLEN];
+            if (inet_ntop(AF_INET, &peer_address->sin_addr, ip_str, INET_ADDRSTRLEN) == NULL) {
+                syserr("inet_ntop");
+            }
+            uint16_t port = ntohs(peer_address->sin_port);
+        
+            // Deserialize Message structure.
+            memcpy(&msg, buf, sizeof(Message));
+            msg_convert_to_host(&msg);
+            if (msg.message != MSG_HELLO_REPLY) syserr("Received not ACK_CONNECT!");
+
+
+        }
 
         // TODO
+
         // for (address in reply.peer_address) {
         //     connect with address:reply.peer_port; // with msg_connect
         // }
@@ -368,6 +515,8 @@ void listen_for_messages() {
 }
 
 int main(int argc, char* argv[]) {
+    init_global();
+
     ProgramArgs program_args = args_default();
     args_parse(argc, argv, &program_args);
 

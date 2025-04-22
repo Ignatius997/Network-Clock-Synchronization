@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include <inttypes.h>
 #include <arpa/inet.h>
 #include <stdbool.h>
 #include <regex.h>
@@ -9,6 +10,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
+#include <unistd.h>
 
 #define DEFAULT_PORT 0
 
@@ -36,6 +38,67 @@
  */
 static int g_socket_fd;
 
+// TODO: Skopiować mimową bibliotekę errorową. Czy można?
+void syserr(const char *msg) {
+    fprintf(stderr, "%s\n", msg);
+    exit(1);
+}
+
+// TODO przenieść w inne miejsce
+void init_addr(struct sockaddr_in *bind_address, uint16_t port) {
+    // NOTE kod i komentarz zajumany z echo-server.c z labów udp.
+    // Bind the socket to a concrete address
+    bind_address->sin_family = AF_INET; // IPv4
+    bind_address->sin_addr.s_addr = htonl(INADDR_ANY);
+    bind_address->sin_port = htons(port);
+}
+
+// TODO obsłużyć przypadek bez podanego portu
+// TODO przenieść w inne miejsce
+// TODO lepsza nazwa
+// TODO rozbić socket z bind_address?
+void init_socket(struct sockaddr_in *bind_address, uint16_t port) {
+    g_socket_fd = socket(AF_INET, SOCK_DGRAM, 0);
+    if (g_socket_fd < 0) {
+        syserr("Socket creation failed");
+    }
+
+    init_addr(bind_address, port);
+
+    if (bind(g_socket_fd, (struct sockaddr *) bind_address, (socklen_t) sizeof(*bind_address)) < 0) {
+        syserr("bind");
+    }
+
+    fprintf(stderr, "Listening on port %" PRIu16 "\n", port);
+}
+
+// TODO przeniesc w inne miejsce
+/**
+ * Zajumane z labów udp: funkcja `get_server_address`.
+ */
+static struct sockaddr_in get_peer_address(char const *peer, uint16_t port) {
+    struct addrinfo hints;
+    memset(&hints, 0, sizeof(struct addrinfo));
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_DGRAM;
+    hints.ai_protocol = IPPROTO_UDP;
+
+    struct addrinfo *address_result;
+    int errcode = getaddrinfo(peer, NULL, &hints, &address_result);
+    if (errcode != 0) {
+        syserr("getaddrinfo"); // OG: `fatal("getaddrinfo: %s", gai_strerror(errcode));`
+    }
+
+    struct sockaddr_in send_address;
+    send_address.sin_family = AF_INET;  // IPv4
+    send_address.sin_addr.s_addr =      // IP address
+        ((struct sockaddr_in *) (address_result->ai_addr))->sin_addr.s_addr;
+    send_address.sin_port = htons(port);
+
+    freeaddrinfo(address_result);
+    return send_address;
+}
+
 // ---- Program arguments parsing ---- //
 
 typedef struct ProgramArgs {
@@ -56,12 +119,6 @@ ProgramArgs args_default() {
     
         ._ar_provided           = false,
     };
-}
-
-// TODO: Skopiować mimową bibliotekę errorową. Czy można?
-void syserr(const char *msg) {
-    fprintf(stderr, "%s\n", msg);
-    exit(1);
 }
 
 regex_t argument_option_regex(void) {
@@ -184,8 +241,7 @@ void args_print(ProgramArgs *args) {
 // TODO lepsza nazwa: ---- Node Message Struct ---- //
 
 // TODO komentarz
-typedef struct Message {
-    // TODO Czy na pewno `uint`, a nie `int` w niektórych polach?
+typedef struct __attribute__((__packed__)) {
     uint8_t     message; // message type
     uint16_t    count; // count of known nodes
     uint8_t     peer_address_length; // number of octets in `peer_address`
@@ -199,6 +255,18 @@ Message msg_init() {
     Message msg;
     memset(&msg, 0, sizeof(Message));
     return msg;
+}
+
+void msg_convert_to_network(Message *msg) {
+    msg->count = htons(msg->count);
+    msg->peer_port = htons(msg->peer_port);
+    msg->timestamp = htobe64(msg->timestamp);
+}
+
+void msg_convert_to_host(Message *msg) {
+    msg->count = ntohs(msg->count);
+    msg->peer_port = ntohs(msg->peer_port);
+    msg->timestamp = be64toh(msg->timestamp);
 }
 
 Message msg_hello() {
@@ -219,82 +287,44 @@ inline Message msg_acknowledge_connect() {
 
 }
 
-// TODO przeniesc w inne miejsce
-/**
- * Zajumane z labów udp: funkcja `get_server_address`.
- */
-static struct sockaddr_in get_peer_address(char const *peer, uint16_t port) {
-    struct addrinfo hints;
-    memset(&hints, 0, sizeof(struct addrinfo));
-    hints.ai_family = AF_INET;
-    hints.ai_socktype = SOCK_DGRAM;
-    hints.ai_protocol = IPPROTO_UDP;
+void notify_peer(struct sockaddr_in *peer_address) {
+    Message msg = msg_hello();
+    msg_convert_to_network(&msg);
+    
+    socklen_t addr_len = (socklen_t) sizeof(*peer_address);
 
-    struct addrinfo *address_result;
-    int errcode = getaddrinfo(peer, NULL, &hints, &address_result);
-    if (errcode != 0) {
-        syserr("getaddrinfo"); // OG: `fatal("getaddrinfo: %s", gai_strerror(errcode));`
-    }
-
-    struct sockaddr_in send_address;
-    send_address.sin_family = AF_INET;  // IPv4
-    send_address.sin_addr.s_addr =      // IP address
-        ((struct sockaddr_in *) (address_result->ai_addr))->sin_addr.s_addr;
-    send_address.sin_port = htons(port);
-
-    freeaddrinfo(address_result);
-    return send_address;
+    ssize_t send_len = sendto(g_socket_fd, &msg, sizeof(msg), 0,
+                          (struct sockaddr *) peer_address, addr_len);
+    if (send_len < 0) syserr("sendto HELLO");
 }
 
-void notify_peer(ProgramArgs args) {
-    Message msg_hello = msg_hello();
-    // Wyślij hello
-    struct sockadr_in peer_address = get_peer_address(args.peer_address, args.peer_port);
-    char const *peer_ip = inet_ntoa(peer_address.sin_addr);
-    uint16_t peer_port = ntohs(peer_address.sin_port);
-    connect_
+void receive_reply(struct sockaddr_in *peer_address) {
+    Message msg;
+    socklen_t addr_len;
 
-    // Odbierz komunikat HELLO_REPLY
-    for (address in reply.peer_address) {
-        connect with address:reply.peer_port; // with msg_connect
-    }
-    // Czy to można rzeczywiście rozbić na dwie pętle?
-    for (address in reply.peer_address) {
-        receive msg_ack_connect;
-        dodaj do listy wezlow potwierdzony wezel;
-    }
-}
+    ssize_t recv_len = recvfrom(g_socket_fd, &msg, sizeof(msg), 0,
+                                (struct sockaddr *) peer_address, &addr_len);
+    if (recv_len < 0) syserr("recvfrom HELLO_REPLY");
+    msg_convert_to_host(&msg);
 
-// TODO przenieść w inne miejsce
-void init_addr(struct sockaddr_in *bind_address, uint16_t port) {
-    // NOTE kod i komentarz zajumany z echo-server.c z labów udp.
-    // Bind the socket to a concrete address
-    bind_address->sin_family = AF_INET; // IPv4
-    bind_address->sin_addr.s_addr = htonl(INADDR_ANY);
-    bind_address->sin_addr = htons(port);
-}
-
-// TODO przenieść w inne miejsce
-// TODO lepsza nazwa
-// TODO rozbić socket z bind_address?
-void init_socket(struct sockaddr_in *bind_address, uint16_t port) {
-    g_socket_fd = socket(AF_INET, SOCK_DGRAM, 0);
-    if (g_socket_fd < 0) {
-        syserr("Socket creation failed");
-    }
-
-    init_addr(bind_address, port);
-
-    if (bind(g_socket_fd, (struct sockaddr *) bind_address, (socklen_t) sizeof(*bind_address)) < 0) {
-        syserr("bind");
-    }
-
-    fprintf(stderr, "Listening on port %" PRIu16 "\n", port);
+    if (msg.message != MSG_HELLO_REPLY) syserr("Received not reply? WTH?");
 }
 
 void join_network(ProgramArgs args) {
     if (args._ar_provided) {
-        notify_peer(args);
+        struct sockaddr_in peer_address = get_peer_address(args.peer_address, args.peer_port);
+        
+        notify_peer(&peer_address);
+        receive_reply(&peer_address);
+
+        // for (address in reply.peer_address) {
+        //     connect with address:reply.peer_port; // with msg_connect
+        // }
+    
+        // for (address in reply.peer_address) {
+        //     receive msg_ack_connect;
+        //     dodaj do listy wezlow potwierdzony wezel;
+        // }
     } else {
         // Nasłuchuj komunikatów.
     }
@@ -309,5 +339,6 @@ int main(int argc, char* argv[]) {
     
     join_network(program_args);
     
+    close(g_socket_fd);
     return 0;
 }

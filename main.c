@@ -44,12 +44,20 @@ void syserr(const char *msg) {
     exit(1);
 }
 
+uint32_t get_address(const char *addr) {
+    uint32_t inaddr = addr == NULL ? htonl(INADDR_ANY) : inet_addr(addr);
+    if (inaddr == INADDR_NONE && addr != NULL) {
+        syserr("Invalid IPv4 address");
+    }
+    return inaddr;
+}
+
 // TODO przenieść w inne miejsce
-void init_addr(struct sockaddr_in *bind_address, uint16_t port) {
+void init_addr(struct sockaddr_in *bind_address, const char *addr, const uint16_t port) {
     // NOTE kod i komentarz zajumany z echo-server.c z labów udp.
     // Bind the socket to a concrete address
     bind_address->sin_family = AF_INET; // IPv4
-    bind_address->sin_addr.s_addr = htonl(INADDR_ANY);
+    bind_address->sin_addr.s_addr = get_address(addr);
     bind_address->sin_port = htons(port);
 }
 
@@ -57,13 +65,13 @@ void init_addr(struct sockaddr_in *bind_address, uint16_t port) {
 // TODO przenieść w inne miejsce
 // TODO lepsza nazwa
 // TODO rozbić socket z bind_address?
-void init_socket(struct sockaddr_in *bind_address, uint16_t port) {
+void init_socket(struct sockaddr_in *bind_address, const char *addr, const uint16_t port) {
     g_socket_fd = socket(AF_INET, SOCK_DGRAM, 0);
     if (g_socket_fd < 0) {
         syserr("Socket creation failed");
     }
 
-    init_addr(bind_address, port);
+    init_addr(bind_address, addr, port);
 
     if (bind(g_socket_fd, (struct sockaddr *) bind_address, (socklen_t) sizeof(*bind_address)) < 0) {
         syserr("bind");
@@ -145,22 +153,6 @@ uint16_t read_port(char const *string) {
     }
 
     return (uint16_t) port;
-}
-
-uint8_t get_ip_length(const char* address) {
-    struct in_addr ipv4_addr;
-    struct in6_addr ipv6_addr;
-    uint8_t len;
-
-    if (inet_pton(AF_INET, address, &ipv4_addr) == 1) {
-        len = 8;
-    } else if (inet_pton(AF_INET6, address, &ipv6_addr) == 1) {
-        len = 16;
-    } else {
-        syserr("Niepoprawny adres ip");
-    }
-
-    return len;
 }
 
 // TODO Komentarz.
@@ -251,6 +243,8 @@ typedef struct __attribute__((__packed__)) {
     uint8_t     synchronized;
 } Message;
 
+// FIXME PRIORYTET 1: O CO CHODZI Z TRZECIM I CZWARTYM POLEM?
+
 Message msg_init() {
     Message msg;
     memset(&msg, 0, sizeof(Message));
@@ -317,6 +311,7 @@ void join_network(ProgramArgs args) {
         notify_peer(&peer_address);
         receive_reply(&peer_address);
 
+        // TODO
         // for (address in reply.peer_address) {
         //     connect with address:reply.peer_port; // with msg_connect
         // }
@@ -330,14 +325,57 @@ void join_network(ProgramArgs args) {
     }
 }
 
+void listen_for_messages() {
+    struct sockaddr_in sender_address;
+    socklen_t addr_len = sizeof(sender_address);
+    Message msg;
+
+    while (true) {
+        ssize_t recv_len = recvfrom(g_socket_fd, &msg, sizeof(msg), 0,
+                                    (struct sockaddr *) &sender_address, &addr_len);
+        if (recv_len < 0) {
+            syserr("recvfrom failed");
+        }
+
+        msg_convert_to_host(&msg);
+
+        switch (msg.message) {
+            case MSG_HELLO:
+                fprintf(stderr, "Received HELLO message\n");
+                // Handle HELLO message
+                break;
+
+            case MSG_HELLO_REPLY:
+                fprintf(stderr, "Received HELLO_REPLY message\n");
+                // Handle HELLO_REPLY message
+                break;
+
+            case MSG_CONNECT:
+                fprintf(stderr, "Received CONNECT message\n");
+                // Handle CONNECT message
+                break;
+
+            case MSG_ACK_CONNECT:
+                fprintf(stderr, "Received ACK_CONNECT message\n");
+                // Handle ACK_CONNECT message
+                break;
+
+            default:
+                fprintf(stderr, "Unknown message type: %u\n", msg.message);
+                break;
+        }
+    }
+}
+
 int main(int argc, char* argv[]) {
     ProgramArgs program_args = args_default();
     args_parse(argc, argv, &program_args);
 
     struct sockaddr_in bind_address; // To avoid allocation on the stack.
-    init_socket(&bind_address, program_args.port);
+    init_socket(&bind_address, program_args.bind_address, program_args.port);
     
     join_network(program_args);
+    listen_for_messages();
     
     close(g_socket_fd);
     return 0;

@@ -11,6 +11,7 @@
 #include <sys/socket.h>
 #include <netdb.h>
 #include <unistd.h>
+#include <signal.h>
 
 #define DEFAULT_PORT 0
 
@@ -91,6 +92,26 @@ void peer_add(Peer *p) {
     }
 
     g_peers[g_count++] = *p;
+}
+
+/** Auxiliary */
+void handle_sigint(int sig) {
+    fprintf(stderr, "\nCaught signal %d (SIGINT). Closing socket and exiting...\n", sig);
+    if (g_socket_fd >= 0) {
+        close(g_socket_fd);
+        fprintf(stderr, "Socket closed.\n");
+    }
+    exit(0);
+}
+
+/** Auxiliary */
+void setup_signal_handler() {
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = handle_sigint;
+    if (sigaction(SIGINT, &sa, NULL) < 0) {
+        syserr("sigaction failed");
+    }
 }
 
 void init_global() {
@@ -589,6 +610,7 @@ void listen_for_messages() {
 
 int main(int argc, char* argv[]) {
     init_global();
+    setup_signal_handler(); // Just for debugging I guess.
 
     ProgramArgs program_args = args_default();
     args_parse(argc, argv, &program_args);

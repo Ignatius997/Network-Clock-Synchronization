@@ -398,7 +398,7 @@ void notify_peer(struct sockaddr_in *peer_address) {
 }
 
 // TODO czy mozna sensownie ujednolicic wysylanie, aby to tez mozna bylo dac do funkcji `msg_send`?
-void reply(struct sockaddr_in *peer_address) {
+void send_hello_reply(struct sockaddr_in *peer_address) {
     Message msg = msg_hello_reply();
     msg_convert_to_network(&msg);
 
@@ -476,7 +476,7 @@ void acknowledge_connection(struct sockaddr_in *peer_address) {
 }
 
 // TODO lepsza nazwa
-void _connect(Peer *p) {
+void send_connect(Peer *p) {
     if (p->peer_address_length != IPV4_ADDR_LEN) syserr("Wrong address");
 
     // TODO nie da sie sprytniej?
@@ -489,44 +489,6 @@ void _connect(Peer *p) {
     send_connect(&peer_address);
 }
 
-// TODO Lepsza nazwa
-void ack_connect() {
-    uint8_t buf[MAX_DATA + sizeof(Message)]; // TODO dziadostwo
-    Message msg;
-    struct sockaddr_in peer_address;
-    memset(&peer_address, 0, sizeof(peer_address)); // TODO potrzebne?
-    socklen_t addr_len = (socklen_t) sizeof(peer_address);
-
-    // Receive HELLO REPLY message.
-    ssize_t recv_len = recvfrom(g_socket_fd, buf, sizeof(buf), 0,
-                                (struct sockaddr *) &peer_address, &addr_len);
-    if (recv_len < 0) syserr("recvfrom ACK_CONNECT");
-    if (recv_len < (ssize_t) sizeof(Message)) {
-        syserr("Received message too small for Message structure");
-    }
-
-    uint8_t ip[16];
-    memset(ip, 0, sizeof(ip));
-    memcpy(ip, &peer_address.sin_addr, IPV4_ADDR_LEN);
-    uint16_t port = ntohs(peer_address.sin_port);
-
-    // Deserialize Message structure.
-    memcpy(&msg, buf, sizeof(Message));
-    msg_convert_to_host(&msg);
-    if (msg.message != MSG_HELLO_REPLY) syserr("Received not ACK_CONNECT!");
-
-    // TODO czy tutaj trzeba tworzyć nowego Peera?
-    Peer *p = (Peer *)malloc(sizeof(Peer));
-    if (p == NULL) syserr("malloc peer");
-
-    p->peer_address_length = IPV4_ADDR_LEN;
-    memcpy(p->peer_address, ip, IPV4_ADDR_LEN);
-    p->peer_port = port;
-    
-    peer_add(p);
-    free(p);
-}
-
 void join_network(ProgramArgs args) {
     if (!args._ar_provided) return;
 
@@ -537,11 +499,7 @@ void join_network(ProgramArgs args) {
     uint8_t count = receive_reply(&peer_address, &peers); // TODO czy tu czy w listen for messages
 
     for (uint8_t i = 0; i < count; ++i) {
-        _connect(&peers[i]);
-    }
-
-    for (uint8_t i = 0; i < count; ++i) {
-        ack_connect();
+        send_connect(&peers[i]);
     }
 
     free(peers);
@@ -568,8 +526,23 @@ void handle_connect(const struct sockaddr_in *peer_address) {
 }
 
 void handle_ack_connect(const struct sockaddr_in *peer_address) {
-    // TODO: Implement this function
+    uint8_t ip[16];
+    memset(ip, 0, sizeof(ip));
+    memcpy(ip, &peer_address->sin_addr, IPV4_ADDR_LEN);
+    uint16_t port = ntohs(peer_address->sin_port);
+
+    // TODO czy tutaj trzeba tworzyć nowego Peera?
+    Peer *p = (Peer *)malloc(sizeof(Peer));
+    if (p == NULL) syserr("malloc peer");
+
+    p->peer_address_length = IPV4_ADDR_LEN;
+    memcpy(p->peer_address, ip, IPV4_ADDR_LEN);
+    p->peer_port = port;
+    
+    peer_add(p);
+    free(p);
 }
+
 
 void handle_sync_start(const struct sockaddr_in *peer_address, const Message *msg) {
     // TODO: Implement this function
@@ -597,11 +570,11 @@ void handle_time(const struct sockaddr_in *peer_address, const Message *msg) {
 
 void listen_for_messages() {
     uint8_t buf[MAX_DATA];
-    memset(buf, 0, sizeof(buf));
 
     struct sockaddr_in peer_address;
 
     while (true) {
+        memset(buf, 0, sizeof(buf)); // NOTE Czy potrzebne?
         socklen_t addr_len = (socklen_t) sizeof(peer_address);
 
         // Odbiór danych
@@ -627,12 +600,8 @@ void listen_for_messages() {
         // Sprawdzenie typu komunikatu
         switch (msg.message) {
             case MSG_HELLO:
-                reply(&peer_address);
+                send_hello_reply(&peer_address); // NOTE nazwa nie zgadza się z konwencją
                 break;
-
-            // case MSG_HELLO_REPLY: // TODO czy tu czy oddzielnie
-            //     handle_hello_reply(msg->data, received_length - sizeof(Message));
-            //     break;
 
             case MSG_CONNECT:
                 handle_connect(&peer_address);

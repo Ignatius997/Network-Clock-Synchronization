@@ -1,6 +1,7 @@
 ---- OTWARTE ----
 1. Nasłuchiwanie na komunikaty
 1.1. Czy jeśli _ar_provided, to czy ten węzeł też jest znajomym nowego węzła?
+1.1.1. Co jeśli drugi raz dodajemy ten sam węzeł? (Sprawdzić treść oraz discorda)
 1.2. Posprzątać!
 2. Jak nie przekroczyć czasu oczekiwania?
 3. Jaki ma być MAX_DATA? Co jeśli nie starczy pamięci?
@@ -8,6 +9,10 @@
 5. Zamienić funkcję get_peer_address na taką, która przyjmuje wskaźnik do struct sockaddr_in, a nie zwraca te strukture.
 6. Zamykanie gniazda w przypadku błędu.
 7. uint8_t czy char?
+
+NA KONIEC
+1. Modularność - biblioteki.
+2. Klasy i structy i fajność, jedność.
 
 ---- ROZWIĄZANE ----
 1. Rozdzielamy HELLO REPLY na dwa komunikaty?

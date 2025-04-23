@@ -79,6 +79,7 @@ static int      g_socket_fd;
 static Peer*    g_peers; // Known peer nodes.
 static uint16_t g_count; // Number of known peer nodes
 static uint16_t g_peers_capacity; // `g_peers` capacity
+static uint64_t g_t1, g_t2, g_t3, g_t4; // TODO Nie jestem pewien co do typu
 
 void peer_add(Peer *p) {
     if (g_count == UINT16_MAX) {
@@ -533,7 +534,7 @@ void join_network(ProgramArgs args) {
     Peer *peers = NULL;
 
     notify_peer(&peer_address);
-    uint8_t count = receive_reply(&peer_address, &peers);
+    uint8_t count = receive_reply(&peer_address, &peers); // TODO czy tu czy w listen for messages
 
     for (uint8_t i = 0; i < count; ++i) {
         _connect(&peers[i]);
@@ -562,8 +563,40 @@ void validate_address(const struct sockaddr_in *addr) {
     // }
 }
 
+void handle_connect(const struct sockaddr_in *peer_address) {
+    // TODO: Implement this function
+}
+
+void handle_ack_connect(const struct sockaddr_in *peer_address) {
+    // TODO: Implement this function
+}
+
+void handle_sync_start(const struct sockaddr_in *peer_address, const Message *msg) {
+    // TODO: Implement this function
+}
+
+void handle_delay_request(const struct sockaddr_in *peer_address, const Message *msg) {
+    // TODO: Implement this function
+}
+
+void handle_delay_response(const struct sockaddr_in *peer_address, const Message *msg) {
+    // TODO: Implement this function
+}
+
+void handle_leader(const struct sockaddr_in *peer_address, const Message *msg) {
+    // TODO: Implement this function
+}
+
+void handle_get_time(const Message *msg) {
+    // TODO: Implement this function
+}
+
+void handle_time(const struct sockaddr_in *peer_address, const Message *msg) {
+    // TODO: Implement this function
+}
+
 void listen_for_messages() {
-    uint8_t buf[MAX_DATA]; // TODO uint8_t czy char?
+    uint8_t buf[MAX_DATA];
     memset(buf, 0, sizeof(buf));
 
     struct sockaddr_in peer_address;
@@ -597,9 +630,41 @@ void listen_for_messages() {
                 reply(&peer_address);
                 break;
 
-            // case MSG_HELLO_REPLY:
+            // case MSG_HELLO_REPLY: // TODO czy tu czy oddzielnie
             //     handle_hello_reply(msg->data, received_length - sizeof(Message));
             //     break;
+
+            case MSG_CONNECT:
+                handle_connect(&peer_address);
+                break;
+
+            case MSG_ACK_CONNECT:
+                handle_ack_connect(&peer_address);
+                break;
+
+            case MSG_SYNC_START:
+                handle_sync_start(&peer_address, &msg);
+                break;
+
+            case MSG_DELAY_REQUEST:
+                handle_delay_request(&peer_address, &msg);
+                break;
+
+            case MSG_DELAY_RESPONSE:
+                handle_delay_response(&peer_address, &msg);
+                break;
+
+            case MSG_LEADER:
+                handle_leader(&peer_address, &msg);
+                break;
+
+            case MSG_GET_TIME:
+                handle_get_time(&msg);
+                break;
+
+            case MSG_TIME:
+                handle_time(&peer_address, &msg);
+                break;
 
             default: // Nieznany typ komunikatu
                 printf("Unknown message type: %d\n", msg.message);

@@ -1,0 +1,14 @@
+---- OTWARTE ----
+1. Nasłuchiwanie na komunikaty
+1.1. Czy jeśli _ar_provided, to czy ten węzeł też jest znajomym nowego węzła?
+1.2. Posprzątać!
+2. Jak nie przekroczyć czasu oczekiwania?
+3. Jaki ma być MAX_DATA? Co jeśli nie starczy pamięci?
+4. Czy receive_reply jest poprawne: W sensie tam oczekujemy tylko i wyłącznie na HELLO_REPLY, to nienajlepsze? Co robić z innymi komunikatami, które mogą przyjść w międzyczasie? Czy mogą?
+5. Zamienić funkcję get_peer_address na taką, która przyjmuje wskaźnik do struct sockaddr_in, a nie zwraca te strukture.
+6. Zamykanie gniazda w przypadku błędu.
+7. uint8_t czy char?
+
+---- ROZWIĄZANE ----
+1. Rozdzielamy HELLO REPLY na dwa komunikaty?
+    ODP: Nie, nielegalne

@@ -30,6 +30,7 @@
 #define MSG_LEADER          21
 #define MSG_GET_TIME        31
 #define MSG_TIME            32
+#define MSG_PEER            41
 
 #define IPV4_ADDR_LEN 4
 
@@ -75,6 +76,7 @@ void peer_convert_to_host(Peer *p) {
 /** Node attributes shall be accessible via global variables.
  * Naming convention: g_{name}.
  */
+// NOTE tutaj trzymamy wszystko w host, czyli, w little endianness.
 static int      g_socket_fd;
 static Peer*    g_peers; // Known peer nodes.
 static uint16_t g_count; // Number of known peer nodes
@@ -314,82 +316,211 @@ void args_print(ProgramArgs *args) {
     fprintf(stderr, "  Peer Port: %u\n", args->peer_port);
 }
 
-// TODO lepsza nazwa: ---- Node Message Struct ---- //
+// ==== Node Message Struct ==== // Lepsza nazwa ofc
 
-// TODO komentarz
 typedef struct __attribute__((__packed__)) {
-    uint8_t     message; // message type
-    uint16_t    count; // count of known nodes
-    uint8_t     peer_address_length; // number of octets in `peer_address`
-    uint8_t     peer_address[16]; // node IP address
-    uint16_t    peer_port;
-    uint64_t    timestamp;
-    uint8_t     synchronized;
+    uint8_t  message; // message type
 } Message;
 
+typedef struct __attribute__((__packed__)) {
+    Message  base; // Base Message
+} HelloMessage;
+
+typedef struct __attribute__((__packed__)) {
+    Message  base; // Base Message
+    uint16_t count; // count of known nodes
+} HelloReplyMessage;
+
+typedef struct __attribute__((__packed__)) {
+    Message  base; // Base Message
+} ConnectMessage;
+
+typedef struct __attribute__((__packed__)) {
+    Message  base; // Base Message
+} AckConnectMessage;
+
+typedef struct __attribute__((__packed__)) {
+    Message  base; // Base Message
+    uint8_t  synchronized;
+    uint64_t timestamp;
+} SyncStartMessage;
+
+typedef struct __attribute__((__packed__)) {
+    Message  base; // Base Message
+} DelayRequestMessage;
+
+typedef struct __attribute__((__packed__)) {
+    Message  base; // Base Message
+    uint8_t  synchronized;
+    uint64_t timestamp;
+} DelayResponseMessage;
+
+typedef struct __attribute__((__packed__)) {
+    Message  base; // Base Message
+    uint8_t  synchronized;
+} LeaderMessage;
+
+typedef struct __attribute__((__packed__)) {
+    Message  base; // Base Message
+} GetTimeMessage;
+
+typedef struct __attribute__((__packed__)) {
+    Message  base; // Base Message
+    uint8_t  synchronized;
+    uint64_t timestamp;
+} TimeMessage;
+
+// TODO można skrócić
 void msg_print(const Message *msg) {
     fprintf(stderr, "Message %p:\n", (void*) msg);
-    fprintf(stderr, "  Type: %u\n", msg->message);
-    fprintf(stderr, "  Count: %u\n", msg->count);
-    fprintf(stderr, "  Peer Address Length: %u\n", msg->peer_address_length);
-    fprintf(stderr, "  Peer Address: ");
-    for (uint8_t i = 0; i < msg->peer_address_length; ++i) {
-        fprintf(stderr, "%s%u", (i > 0 ? "." : ""), msg->peer_address[i]);
-    }
-    fprintf(stderr, "\n");
-    fprintf(stderr, "  Peer Port: %u\n", msg->peer_port);
-    fprintf(stderr, "  Timestamp: %" PRIu64 "\n", msg->timestamp);
-    fprintf(stderr, "  Synchronized: %u\n", msg->synchronized);
-}
+    switch (msg->message) {
+        case MSG_HELLO:
+            fprintf(stderr, "  Type: HELLO\n");
+            break;
 
-Message msg_init() {
-    Message msg;
-    memset(&msg, 0, sizeof(Message));
-    return msg;
+        case MSG_HELLO_REPLY:
+            HelloReplyMessage *hello_reply = (HelloReplyMessage *) msg;
+            fprintf(stderr, "  Type: HELLO_REPLY\n");
+            fprintf(stderr, "  Count: %u\n", hello_reply->count);
+            break;
+
+        case MSG_CONNECT:
+            fprintf(stderr, "  Type: CONNECT\n");
+            break;
+
+        case MSG_ACK_CONNECT:
+            fprintf(stderr, "  Type: ACK_CONNECT\n");
+            break;
+
+        case MSG_SYNC_START:
+            SyncStartMessage *sync_start = (SyncStartMessage *) msg;
+            fprintf(stderr, "  Type: SYNC_START\n");
+            fprintf(stderr, "  Timestamp: %" PRIu64 "\n", sync_start->timestamp);
+            fprintf(stderr, "  Synchronized: %u\n", sync_start->synchronized);
+            break;
+
+        case MSG_DELAY_REQUEST:
+            fprintf(stderr, "  Type: DELAY_REQUEST\n");
+            break;
+
+        case MSG_DELAY_RESPONSE:
+            DelayResponseMessage *delay_response = (DelayResponseMessage *) msg;
+            fprintf(stderr, "  Type: DELAY_RESPONSE\n");
+            fprintf(stderr, "  Synchronized: %u\n", delay_response->synchronized);
+            fprintf(stderr, "  Timestamp: %" PRIu64 "\n", delay_response->timestamp);
+            break;
+
+        case MSG_LEADER:
+            LeaderMessage *leader = (LeaderMessage *) msg;
+            fprintf(stderr, "  Type: LEADER\n");
+            fprintf(stderr, "  Synchronized: %u\n", leader->synchronized);
+            break;
+
+        case MSG_GET_TIME:
+            fprintf(stderr, "  Type: GET_TIME\n");
+            break;
+
+        case MSG_TIME:
+            TimeMessage *time_msg = (TimeMessage *) msg;
+            fprintf(stderr, "  Type: TIME\n");
+            fprintf(stderr, "  Synchronized: %u\n", time_msg->synchronized);
+            fprintf(stderr, "  Timestamp: %" PRIu64 "\n", time_msg->timestamp);
+            break;
+
+        default:
+            fprintf(stderr, "  Unknown message type: %u\n", msg->message);
+            break;
+    }
 }
 
 void msg_convert_to_network(Message *msg) {
-    msg->count = htons(msg->count);
-    msg->peer_port = htons(msg->peer_port);
-    msg->timestamp = htobe64(msg->timestamp);
+    switch (msg->message) {
+        case MSG_HELLO_REPLY: {
+            HelloReplyMessage *hello_reply = (HelloReplyMessage *) msg;
+            hello_reply->count = htons(hello_reply->count);
+            break;
+        }
+        case MSG_SYNC_START: {
+            SyncStartMessage *sync_start = (SyncStartMessage *) msg;
+            sync_start->timestamp = htobe64(sync_start->timestamp);
+            break;
+        }
+        case MSG_DELAY_RESPONSE: {
+            DelayResponseMessage *delay_response = (DelayResponseMessage *) msg;
+            delay_response->timestamp = htobe64(delay_response->timestamp);
+            break;
+        }
+        case MSG_TIME: {
+            TimeMessage *time_msg = (TimeMessage *) msg;
+            time_msg->timestamp = htobe64(time_msg->timestamp);
+            break;
+        }
+        default:
+            break;
+    }
 }
 
 void msg_convert_to_host(Message *msg) {
-    msg->count = ntohs(msg->count);
-    msg->peer_port = ntohs(msg->peer_port);
-    msg->timestamp = be64toh(msg->timestamp);
-}
-
-Message msg_hello() {
-    Message msg = msg_init();
-    msg.message = MSG_HELLO;
-    return msg;
-}
-
-Message msg_hello_reply() {
-    Message msg = msg_init();
-    msg.message = MSG_HELLO_REPLY;
-    msg.count = g_count;
-    return msg;
-}
-
-inline Message msg_connect() {
-    Message msg = msg_init();
-    msg.message = MSG_CONNECT;
-    return msg;
-}
-
-inline Message msg_acknowledge_connection() {
-    Message msg = msg_init();
-    msg.message = MSG_ACK_CONNECT;
-    return msg;
+    switch (msg->message) {
+        case MSG_HELLO_REPLY: {
+            HelloReplyMessage *hello_reply = (HelloReplyMessage *) msg;
+            hello_reply->count = ntohs(hello_reply->count);
+            break;
+        }
+        case MSG_SYNC_START: {
+            SyncStartMessage *sync_start = (SyncStartMessage *) msg;
+            sync_start->timestamp = be64toh(sync_start->timestamp);
+            break;
+        }
+        case MSG_DELAY_RESPONSE: {
+            DelayResponseMessage *delay_response = (DelayResponseMessage *) msg;
+            delay_response->timestamp = be64toh(delay_response->timestamp);
+            break;
+        }
+        case MSG_TIME: {
+            TimeMessage *time_msg = (TimeMessage *) msg;
+            time_msg->timestamp = be64toh(time_msg->timestamp);
+            break;
+        }
+        default:
+            break;
+    }
 }
 
 // TODO te całe wysyłanie możnaby jakoś ujednolicić.
 // TODO dodać to cale oczekiwanie od 5 do 10 sekund
 
-int msg_send(Message *msg, const struct sockaddr_in *peer_address) {
+// FIXME wątpliwości w sprawie rozmiaru
+int msg_send(const Message *msg, const struct sockaddr_in *peer_address) {
     msg_convert_to_network(msg);
+
+    size_t msg_size;
+    switch (msg->message) {
+        case MSG_HELLO:
+        case MSG_CONNECT:
+        case MSG_ACK_CONNECT:
+        case MSG_DELAY_REQUEST:
+        case MSG_GET_TIME:
+            msg_size = sizeof(Message);
+            break;
+
+        case MSG_SYNC_START:
+        case MSG_DELAY_RESPONSE:
+        case MSG_TIME:
+            msg_size = sizeof(SyncStartMessage);
+            break;
+
+        case MSG_HELLO_REPLY:
+            msg_size = sizeof(HelloReplyMessage);
+            break;
+
+        case MSG_LEADER:
+            msg_size = sizeof(LeaderMessage);
+            break;
+
+        default:
+            syserr("Unknown message type");
+    }
     socklen_t addr_len = (socklen_t) sizeof(*peer_address);
     return sendto(g_socket_fd, msg, sizeof(*msg), 0,
                   (struct sockaddr *) peer_address, addr_len);
@@ -451,7 +582,7 @@ void validate_received_length(const ssize_t recv_len) {
 // TODO ta funkcja jest aczytalna
 uint8_t receive_and_handle_hello_reply(struct sockaddr_in *peer_address, Peer **peers) {
     uint8_t buf[MAX_DATA];
-    Message msg;
+    HelloReplyMessage msg;
     socklen_t addr_len = (socklen_t) sizeof(*peer_address);
 
     // Receive HELLO REPLY message.
@@ -460,7 +591,7 @@ uint8_t receive_and_handle_hello_reply(struct sockaddr_in *peer_address, Peer **
     if (recv_len < 0) syserr("recvfrom HELLO_REPLY");
 
     // Deserialize Message structure.
-    memcpy(&msg, buf, sizeof(Message));
+    memcpy(&msg, buf, sizeof(HelloReplyMessage));
     msg_convert_to_host(&msg);
     if (msg.message != MSG_HELLO_REPLY) syserr("Received not reply? WTH?");
     log_received_message("HELLO REPLY", peer_address, &msg, recv_len);
@@ -475,31 +606,39 @@ uint8_t receive_and_handle_hello_reply(struct sockaddr_in *peer_address, Peer **
         for (size_t i = 0; i < msg.count; ++i) {
             peer_convert_to_host(&(*peers)[i]);
             peer_print(&(*peers)[i]);
+            // FIXME Validate!
         }
     }
 
+    // FIXME Jeśli jest niepoprawnie, to wynikiem powinno być 255 (czy to poprawne?)
     return msg.count;
 }
 
 void send_hello(struct sockaddr_in *peer_address) {
-    Message msg = msg_hello();
+    HelloMessage msg = {
+        .base.message = MSG_HELLO
+    };
     ssize_t send_len = msg_send(&msg, peer_address);
     if (send_len < 0) syserr("sendto HELLO");
 
-    msg_convert_to_host(&msg); // w msg_send zostalo przekonwertowane do network :(
-    log_sent_message("HELLO", peer_address, &msg, send_len);
+    msg_convert_to_host((Message *)&msg); // w msg_send zostalo przekonwertowane do network :(
+    log_sent_message("HELLO", peer_address, (Message *)&msg, send_len);
 }
 
 void send_connect(struct sockaddr_in *peer_address) {
-    Message msg = msg_connect();
-    ssize_t send_len = msg_send(&msg, peer_address);
+    ConnectMessage msg = {
+        .base.message = MSG_CONNECT
+    };
+    ssize_t send_len = msg_send((Message *)&msg, peer_address);
     if (send_len < 0) syserr("sendto CONNECT");
     msg_convert_to_host(&msg); // w msg_send zostalo przekonwertowane do network :(
     log_sent_message("CONNECT", peer_address, &msg, send_len);
 }
 
 void send_ack_connect(const struct sockaddr_in *peer_address) {
-    Message msg = msg_acknowledge_connection();
+    AckConnectMessage msg = {
+        .base.message = MSG_ACK_CONNECT
+    };
     ssize_t send_len = msg_send(&msg, peer_address);
     if (send_len < 0) syserr("sendto ACK CONNECT");
     msg_convert_to_host(&msg); // w msg_send zostalo przekonwertowane do network :(
@@ -563,20 +702,23 @@ void establish_connection(const struct sockaddr_in *peer_address) {
 // TODO czy mozna sensownie ujednolicic wysylanie, aby to tez mozna bylo dac do funkcji `msg_send`?
 // TODO Posprzątać
 void handle_hello(struct sockaddr_in *peer_address) {
-    Message msg = msg_hello_reply();
+    HelloReplyMessage msg = {
+        .base.message = MSG_HELLO_REPLY,
+        .count        = g_count,
+    };
     msg_convert_to_network(&msg);
 
-    size_t msg_size = sizeof(Message);
+    size_t msg_size = sizeof(HelloReplyMessage);
     size_t peers_size = g_count * sizeof(Peer);
     size_t total_size = msg_size + peers_size;
 
-    uint8_t *buf = (uint8_t*) malloc(total_size);
+    uint8_t *buf = (uint8_t *)malloc(total_size);
     if (buf == NULL) syserr("malloc");
 
     memcpy(buf, &msg, msg_size);
     memcpy(buf + msg_size, g_peers, peers_size);
     
-    size_t offset = sizeof(Message);
+    size_t offset = msg_size;
     for (size_t i = 0; i < g_count; ++i) {
         Peer *p = (Peer *) (buf + offset);
         p->peer_port = htons(p->peer_port);
@@ -639,6 +781,51 @@ void handle_time(const struct sockaddr_in *peer_address, const Message *msg) {
     // TODO: Implement this function
 }
 
+size_t msg_determine_size(Message *msg) {
+    return (switch (msg->message) {
+        case MSG_HELLO:
+        case MSG_CONNECT:
+        case MSG_ACK_CONNECT:
+        case MSG_DELAY_REQUEST:
+        case MSG_GET_TIME:
+            sizeof(Message);
+
+        case MSG_SYNC_START:
+        case MSG_DELAY_RESPONSE:
+        case MSG_TIME:
+            sizeof(SyncStartMessage);
+
+        case MSG_HELLO_REPLY:
+            sizeof(HelloReplyMessage);
+
+        case MSG_LEADER:
+            sizeof(LeaderMessage);
+
+        default:
+            syserr("Unknown message type");
+    });
+}
+
+void msg_load(Message **msg, const uint8_t *buf) {
+    *msg = malloc(sizeof(Message));
+    if (*msg == NULL) syserr("malloc msg_load");
+    
+    memcpy(*msg, buf, sizeof(Message));
+    size_t msg_size = msg_determine_size(*msg);
+
+    if (msg_size > sizeof(Message)) {
+        Message *tmp_msg = realloc(*msg, msg_size);
+        if (tmp_msg == NULL) {
+            free(*msg);
+            syserr("realloc msg_load");
+            return;
+        }
+        
+        *msg = new_msg;
+        memcpy((uint8_t *)*msg + sizeof(Message), buf + sizeof(Message), msg_size - sizeof(Message));
+    }
+}
+
 void listen_for_messages() {
     uint8_t buf[MAX_DATA];
 
@@ -654,14 +841,15 @@ void listen_for_messages() {
         validate_received_length(recv_len);
 
         // Interpretacja odebranych danych jako struktura Message
-        Message msg;
-        memcpy(&msg, buf, sizeof(Message));
-        msg_convert_to_host(&msg);
+        // NOTE Shady
+        Message *msg;
+        msg_load(&msg, buf);
 
         // Validate peer_address contents.
         validate_address(&peer_address);
 
         // Sprawdzenie typu komunikatu. Można napisać coś o tym, czemu nie rozważamy MSG_HELLO_REPLY.
+        // TODO to można uprościć, bezsensowny switch
         switch (msg.message) {
             case MSG_HELLO:
                 log_received_message("MSG_HELLO", &peer_address, &msg, recv_len);

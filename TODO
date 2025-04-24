@@ -1,18 +1,25 @@
 ---- OTWARTE ----
+Zobaczyc, co na discordzie odpisali
 0. Kiedy dodaje się trzeci węzeł, to coś się psuje. Stestować
-1.1.1. Co jeśli drugi raz dodajemy ten sam węzeł? (Sprawdzić treść oraz discorda)
+0.1. Jak w końcu to HELLO_REPLY, jak z innymi? Czy zrobić jakąś klasę i podklasy, tak jak we Future'ach? TAK
+        - nie miec PeerMessage, to bedzei po prostu w Peer
+1.1.1. Co jeśli drugi raz dodajemy ten sam węzeł? (Sprawdzić treść oraz discorda) TO JEST NA DISCORDZIE, ZGLEBIC
 1.1.2 Połączyć te pierwsze węzły DONE
 1.1.2.1 Co jeśli u starego węzła nie starcza miejsca na nowego? Problem jest też taki, że establish_connection u starego robimy na końcu handle_hello.
 1.2. Posprzątać!
-1.2.1 Dodać consty
+1.2.1. Dodać consty
+1.2.2. Na wszelki zapisać globalnie swoj adres oraz port
+1.2.3. Globalny czy lokalny bufor?
+1.2.4. Być może po prostu tablica rozmiaru ~65k na znane węzły?
+1.2.5. Skoro (a propos Message) "Wartości w binarnych polach wielooktetowych zapisuje się w porządku sieciowym.", to czy nie mamy/lepiej ich w sumie stale mieć w porządku sieciowym?
 2. Jak nie przekroczyć czasu oczekiwania?
 3. Jaki ma być MAX_DATA? Co jeśli nie starczy pamięci?
 5. Zamienić funkcję get_peer_address na taką, która przyjmuje wskaźnik do struct sockaddr_in, a nie zwraca te strukture.
 6. Zamykanie gniazda w przypadku błędu.
 7. uint8_t czy unsigned char?
-8. Jak sprawdzać dane podane na wejściu, szczególnie adresy. Z jednej strony przy pierwszej próbie nawiazania polaczenia funkcja sie wywali, z drugiej czy nie powinnismy o tym wiedziec zawczasu?
 9. Sprawdzić wszystkie inet_*, w szczególności inet_pton i konwertowanie tych adresów do różnych form
 10. W sumie to te makra można zamienić na enum.
+11. Spoofing
 
 NA KONIEC
 1. Modularność - biblioteki.
@@ -25,3 +32,6 @@ NA KONIEC
     ODP: Nie możemy oczekiwać wyłącznie na ACK_CONNECT, bo już połączone węzły moga wysyłać jakieś inne komunikaty
 3. Czy jeśli _ar_provided, to czy ten węzeł też jest znajomym nowego węzła?
     ODP: Mnie się wydaje, że tak, w końcu w treści napisane jest, że te węzły "nawiązały komunikację". Ale dla pewności można sprawdzić discorda.
+4. Jak sprawdzać dane podane na wejściu, szczególnie adresy. Z jednej strony przy pierwszej próbie nawiazania polaczenia funkcja sie wywali, z drugiej czy nie powinnismy o tym wiedziec zawczasu?
+    ODP: Peczarski pisze, że poprawność sprawdzi funkcja wysyłająca
+

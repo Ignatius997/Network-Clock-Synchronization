@@ -12,6 +12,7 @@
 #include <netdb.h>
 #include <unistd.h>
 #include <signal.h>
+#include <endian.h>
 
 #define DEFAULT_PORT 0
 
@@ -165,7 +166,7 @@ void init_socket(struct sockaddr_in *bind_address, const char *addr, const uint1
 /**
  * Zajumane z labów udp: funkcja `get_server_address`.
  */
-static struct sockaddr_in get_peer_address(char const *peer_ip_str, uint16_t port) {
+struct sockaddr_in get_peer_address(char const *peer_ip_str, uint16_t port) {
     struct addrinfo hints;
     memset(&hints, 0, sizeof(struct addrinfo));
     hints.ai_family = AF_INET;
@@ -435,26 +436,26 @@ void msg_print(const Message *msg) {
 
 void msg_convert_to_network(Message *msg) {
     switch (msg->message) {
-        case MSG_HELLO_REPLY: {
-            HelloReplyMessage *hello_reply = (HelloReplyMessage *) msg;
+        case MSG_HELLO_REPLY:
+            HelloReplyMessage *hello_reply = (HelloReplyMessage *)(void *)msg;
             hello_reply->count = htons(hello_reply->count);
             break;
-        }
-        case MSG_SYNC_START: {
-            SyncStartMessage *sync_start = (SyncStartMessage *) msg;
+
+        case MSG_SYNC_START:
+            SyncStartMessage *sync_start = (SyncStartMessage *)(void *)msg;
             sync_start->timestamp = htobe64(sync_start->timestamp);
             break;
-        }
-        case MSG_DELAY_RESPONSE: {
-            DelayResponseMessage *delay_response = (DelayResponseMessage *) msg;
+
+        case MSG_DELAY_RESPONSE:
+            DelayResponseMessage *delay_response = (DelayResponseMessage *)(void *)msg;
             delay_response->timestamp = htobe64(delay_response->timestamp);
             break;
-        }
-        case MSG_TIME: {
-            TimeMessage *time_msg = (TimeMessage *) msg;
+
+        case MSG_TIME:
+            TimeMessage *time_msg = (TimeMessage *)(void *)msg;
             time_msg->timestamp = htobe64(time_msg->timestamp);
             break;
-        }
+
         default:
             break;
     }
@@ -462,26 +463,26 @@ void msg_convert_to_network(Message *msg) {
 
 void msg_convert_to_host(Message *msg) {
     switch (msg->message) {
-        case MSG_HELLO_REPLY: {
-            HelloReplyMessage *hello_reply = (HelloReplyMessage *) msg;
+        case MSG_HELLO_REPLY:
+            HelloReplyMessage *hello_reply = (HelloReplyMessage *)(void *)msg;
             hello_reply->count = ntohs(hello_reply->count);
             break;
-        }
-        case MSG_SYNC_START: {
-            SyncStartMessage *sync_start = (SyncStartMessage *) msg;
+
+        case MSG_SYNC_START:
+            SyncStartMessage *sync_start = (SyncStartMessage *)(void *)msg;
             sync_start->timestamp = be64toh(sync_start->timestamp);
             break;
-        }
-        case MSG_DELAY_RESPONSE: {
-            DelayResponseMessage *delay_response = (DelayResponseMessage *) msg;
+
+        case MSG_DELAY_RESPONSE:
+            DelayResponseMessage *delay_response = (DelayResponseMessage *)(void *)msg;
             delay_response->timestamp = be64toh(delay_response->timestamp);
             break;
-        }
-        case MSG_TIME: {
-            TimeMessage *time_msg = (TimeMessage *) msg;
+
+        case MSG_TIME:
+            TimeMessage *time_msg = (TimeMessage *)(void *)msg;
             time_msg->timestamp = be64toh(time_msg->timestamp);
             break;
-        }
+
         default:
             break;
     }
@@ -491,7 +492,7 @@ void msg_convert_to_host(Message *msg) {
 // TODO dodać to cale oczekiwanie od 5 do 10 sekund
 
 // FIXME wątpliwości w sprawie rozmiaru
-int msg_send(const Message *msg, const struct sockaddr_in *peer_address) {
+int msg_send(Message *msg, const struct sockaddr_in *peer_address) {
     msg_convert_to_network(msg);
 
     size_t msg_size;
@@ -522,7 +523,7 @@ int msg_send(const Message *msg, const struct sockaddr_in *peer_address) {
             syserr("Unknown message type");
     }
     socklen_t addr_len = (socklen_t) sizeof(*peer_address);
-    return sendto(g_socket_fd, msg, sizeof(*msg), 0,
+    return sendto(g_socket_fd, msg, msg_size, 0,
                   (struct sockaddr *) peer_address, addr_len);
 }
 
@@ -588,19 +589,20 @@ uint8_t receive_and_handle_hello_reply(struct sockaddr_in *peer_address, Peer **
     // Receive HELLO REPLY message.
     ssize_t recv_len = recvfrom(g_socket_fd, buf, sizeof(buf), 0,
                                 (struct sockaddr *) peer_address, &addr_len);
-    if (recv_len < 0) syserr("recvfrom HELLO_REPLY");
+    validate_received_length(recv_len);
+    if (recv_len < (ssize_t) sizeof(HelloReplyMessage)) syserr("Za mało w hello reply");
 
     // Deserialize Message structure.
     memcpy(&msg, buf, sizeof(HelloReplyMessage));
-    msg_convert_to_host(&msg);
-    if (msg.message != MSG_HELLO_REPLY) syserr("Received not reply? WTH?");
-    log_received_message("HELLO REPLY", peer_address, &msg, recv_len);
+    msg_convert_to_host((Message *)&msg);
+    if (msg.base.message != MSG_HELLO_REPLY) syserr("Received not reply? WTH?");
+    log_received_message("HELLO REPLY", peer_address, (Message *)&msg, recv_len);
 
     // Copy contents of peers
     if (msg.count > 0) {
         *peers = malloc(msg.count * sizeof(Peer));
         if (*peers == NULL) syserr("malloc failed");
-        memcpy(*peers, buf + sizeof(Message), msg.count);
+        memcpy(*peers, buf + sizeof(Message), msg.count * sizeof(Peer));
 
         fprintf(stderr, "Peers from HELLO_REPLY:\n");
         for (size_t i = 0; i < msg.count; ++i) {
@@ -618,7 +620,7 @@ void send_hello(struct sockaddr_in *peer_address) {
     HelloMessage msg = {
         .base.message = MSG_HELLO
     };
-    ssize_t send_len = msg_send(&msg, peer_address);
+    ssize_t send_len = msg_send((Message *)&msg, peer_address);
     if (send_len < 0) syserr("sendto HELLO");
 
     msg_convert_to_host((Message *)&msg); // w msg_send zostalo przekonwertowane do network :(
@@ -631,18 +633,18 @@ void send_connect(struct sockaddr_in *peer_address) {
     };
     ssize_t send_len = msg_send((Message *)&msg, peer_address);
     if (send_len < 0) syserr("sendto CONNECT");
-    msg_convert_to_host(&msg); // w msg_send zostalo przekonwertowane do network :(
-    log_sent_message("CONNECT", peer_address, &msg, send_len);
+    msg_convert_to_host((Message *)&msg); // w msg_send zostalo przekonwertowane do network :(
+    log_sent_message("CONNECT", peer_address, (Message *)&msg, send_len);
 }
 
 void send_ack_connect(const struct sockaddr_in *peer_address) {
     AckConnectMessage msg = {
         .base.message = MSG_ACK_CONNECT
     };
-    ssize_t send_len = msg_send(&msg, peer_address);
+    ssize_t send_len = msg_send((Message *)&msg, peer_address);
     if (send_len < 0) syserr("sendto ACK CONNECT");
-    msg_convert_to_host(&msg); // w msg_send zostalo przekonwertowane do network :(
-    log_sent_message("ACK_CONNECT", peer_address, &msg, send_len);
+    msg_convert_to_host((Message *)&msg); // w msg_send zostalo przekonwertowane do network :(
+    log_sent_message("ACK_CONNECT", peer_address, (Message *)&msg, send_len);
 }
 
 // TODO lepsza nazwa
@@ -699,14 +701,10 @@ void establish_connection(const struct sockaddr_in *peer_address) {
     peer_add(&p);
 }
 
-// TODO czy mozna sensownie ujednolicic wysylanie, aby to tez mozna bylo dac do funkcji `msg_send`?
-// TODO Posprzątać
-void handle_hello(struct sockaddr_in *peer_address) {
-    HelloReplyMessage msg = {
-        .base.message = MSG_HELLO_REPLY,
-        .count        = g_count,
-    };
-    msg_convert_to_network(&msg);
+ssize_t send_hello_reply(const struct sockaddr_in *peer_address, const HelloReplyMessage *hrmsg) {
+    HelloReplyMessage msg;
+    memcpy(&msg, hrmsg, sizeof(*hrmsg));
+    msg_convert_to_network((Message *)&msg);
 
     size_t msg_size = sizeof(HelloReplyMessage);
     size_t peers_size = g_count * sizeof(Peer);
@@ -719,8 +717,10 @@ void handle_hello(struct sockaddr_in *peer_address) {
     memcpy(buf + msg_size, g_peers, peers_size);
     
     size_t offset = msg_size;
+    fprintf(stderr, "Sending peers:\n");
     for (size_t i = 0; i < g_count; ++i) {
         Peer *p = (Peer *) (buf + offset);
+        peer_print(p);
         p->peer_port = htons(p->peer_port);
         offset += sizeof(Peer);
     }
@@ -728,11 +728,24 @@ void handle_hello(struct sockaddr_in *peer_address) {
     socklen_t addr_len = (socklen_t) sizeof(*peer_address);
     ssize_t send_len = sendto(g_socket_fd, buf, total_size, 0,
                               (struct sockaddr *) peer_address, addr_len);
+    
+    free(buf);
+    return send_len;
+}
+
+// TODO czy mozna sensownie ujednolicic wysylanie, aby to tez mozna bylo dac do funkcji `msg_send`?
+// TODO Posprzątać
+void handle_hello(const struct sockaddr_in *peer_address) {
+    HelloReplyMessage msg = {
+        .base.message = MSG_HELLO_REPLY,
+        .count        = g_count,
+    };
+
+    ssize_t send_len = send_hello_reply(peer_address, &msg);
     if (send_len < 0) syserr("sendto HELLO REPLY");
     
     fprintf(stderr, "Sent HELLO_REPLY message (%zd bytes)\n", send_len);
-    msg_print(&msg);
-    free(buf);
+    msg_print((Message *)&msg);
 
     establish_connection(peer_address); // Robimy to na koniec, żeby uniknąć tego w HELLO_REPLY
 }
@@ -781,29 +794,37 @@ void handle_time(const struct sockaddr_in *peer_address, const Message *msg) {
     // TODO: Implement this function
 }
 
-size_t msg_determine_size(Message *msg) {
-    return (switch (msg->message) {
+size_t msg_determine_size(const Message *msg) {
+    size_t msg_size;
+
+    switch (msg->message) {
         case MSG_HELLO:
         case MSG_CONNECT:
         case MSG_ACK_CONNECT:
         case MSG_DELAY_REQUEST:
         case MSG_GET_TIME:
-            sizeof(Message);
+            msg_size = sizeof(Message);
+            break;
 
         case MSG_SYNC_START:
         case MSG_DELAY_RESPONSE:
         case MSG_TIME:
-            sizeof(SyncStartMessage);
+            msg_size =  sizeof(SyncStartMessage);
+            break;
 
         case MSG_HELLO_REPLY:
-            sizeof(HelloReplyMessage);
+            msg_size = sizeof(HelloReplyMessage);
+            break;
 
         case MSG_LEADER:
-            sizeof(LeaderMessage);
+            msg_size = sizeof(LeaderMessage);
+            break;
 
         default:
             syserr("Unknown message type");
-    });
+    }
+
+    return msg_size;
 }
 
 void msg_load(Message **msg, const uint8_t *buf) {
@@ -820,8 +841,8 @@ void msg_load(Message **msg, const uint8_t *buf) {
             syserr("realloc msg_load");
             return;
         }
-        
-        *msg = new_msg;
+
+        *msg = tmp_msg;
         memcpy((uint8_t *)*msg + sizeof(Message), buf + sizeof(Message), msg_size - sizeof(Message));
     }
 }
@@ -850,54 +871,54 @@ void listen_for_messages() {
 
         // Sprawdzenie typu komunikatu. Można napisać coś o tym, czemu nie rozważamy MSG_HELLO_REPLY.
         // TODO to można uprościć, bezsensowny switch
-        switch (msg.message) {
+        switch (msg->message) {
             case MSG_HELLO:
-                log_received_message("MSG_HELLO", &peer_address, &msg, recv_len);
+                log_received_message("MSG_HELLO", &peer_address, msg, recv_len);
                 handle_hello(&peer_address); // NOTE nazwa nie zgadza się z konwencją
                 break;
 
             case MSG_CONNECT:
-                log_received_message("MSG_CONNECT", &peer_address, &msg, recv_len);
+                log_received_message("MSG_CONNECT", &peer_address, msg, recv_len);
                 handle_connect(&peer_address);
                 break;
 
             case MSG_ACK_CONNECT:
-                log_received_message("MSG_ACK_CONNECT", &peer_address, &msg, recv_len);
+                log_received_message("MSG_ACK_CONNECT", &peer_address, msg, recv_len);
                 handle_ack_connect(&peer_address);
                 break;
 
             case MSG_SYNC_START:
-                log_received_message("MSG_SYNC_START", &peer_address, &msg, recv_len);
-                handle_sync_start(&peer_address, &msg);
+                log_received_message("MSG_SYNC_START", &peer_address, msg, recv_len);
+                handle_sync_start(&peer_address, msg);
                 break;
 
             case MSG_DELAY_REQUEST:
-                log_received_message("MSG_DELAY_REQUEST", &peer_address, &msg, recv_len);
-                handle_delay_request(&peer_address, &msg);
+                log_received_message("MSG_DELAY_REQUEST", &peer_address, msg, recv_len);
+                handle_delay_request(&peer_address, msg);
                 break;
 
             case MSG_DELAY_RESPONSE:
-                log_received_message("MSG_DELAY_RESPONSE", &peer_address, &msg, recv_len);
-                handle_delay_response(&peer_address, &msg);
+                log_received_message("MSG_DELAY_RESPONSE", &peer_address, msg, recv_len);
+                handle_delay_response(&peer_address, msg);
                 break;
 
             case MSG_LEADER:
-                log_received_message("MSG_LEADER", &peer_address, &msg, recv_len);
-                handle_leader(&peer_address, &msg);
+                log_received_message("MSG_LEADER", &peer_address, msg, recv_len);
+                handle_leader(&peer_address, msg);
                 break;
 
             case MSG_GET_TIME:
-                log_received_message("MSG_GET_TIME", &peer_address, &msg, recv_len);
-                handle_get_time(&msg);
+                log_received_message("MSG_GET_TIME", &peer_address, msg, recv_len);
+                handle_get_time(msg);
                 break;
 
             case MSG_TIME:
-                log_received_message("MSG_TIME", &peer_address, &msg, recv_len);
-                handle_time(&peer_address, &msg);
+                log_received_message("MSG_TIME", &peer_address, msg, recv_len);
+                handle_time(&peer_address, msg);
                 break;
 
             default: // Nieznany typ komunikatu
-                printf("Unknown message type: %d\n", msg.message);
+                printf("Unknown message type: %d\n", msg->message);
                 break;
         }
     }

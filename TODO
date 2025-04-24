@@ -1,7 +1,8 @@
 ---- OTWARTE ----
 Zobaczyc, co na discordzie odpisali
 0. Kiedy dodaje się trzeci węzeł, to coś się psuje. Stestować
-0.1. Jak w końcu to HELLO_REPLY, jak z innymi? Czy zrobić jakąś klasę i podklasy, tak jak we Future'ach? TAK
+    Czemu o odbiorcy (node3) address length to 0, a potem jakieś 23?
+0.1. Jak w końcu to HELLO_REPLY, jak z innymi? Czy zrobić jakąś klasę i podklasy, tak jak we Futureach? TAK
         - nie miec PeerMessage, to bedzei po prostu w Peer
 1.1.1. Co jeśli drugi raz dodajemy ten sam węzeł? (Sprawdzić treść oraz discorda) TO JEST NA DISCORDZIE, ZGLEBIC
 1.1.2 Połączyć te pierwsze węzły DONE
@@ -12,6 +13,7 @@ Zobaczyc, co na discordzie odpisali
 1.2.3. Globalny czy lokalny bufor?
 1.2.4. Być może po prostu tablica rozmiaru ~65k na znane węzły?
 1.2.5. Skoro (a propos Message) "Wartości w binarnych polach wielooktetowych zapisuje się w porządku sieciowym.", to czy nie mamy/lepiej ich w sumie stale mieć w porządku sieciowym?
+1.2.6. W msg_send (i inncyh funkcjach tego typu) powinniśmy być moze tworzyc kopie msg i konwertowac i przesylac kopię dla swiętego spokoju
 2. Jak nie przekroczyć czasu oczekiwania?
 3. Jaki ma być MAX_DATA? Co jeśli nie starczy pamięci?
 5. Zamienić funkcję get_peer_address na taką, która przyjmuje wskaźnik do struct sockaddr_in, a nie zwraca te strukture.

@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -O2
+CFLAGS = -Wall -Wextra -O0 -g
 TARGET = netclocksync
 
 SRC = main.c

@@ -37,9 +37,12 @@
 
 #define MAX_DATA 65535 // TODO lepsza nazwa
 
+void close_socket(void);
+
 // TODO: Skopiować mimową bibliotekę errorową. Czy można?
 void syserr(const char *msg) {
-    fprintf(stderr, "%s\n", msg);
+    fprintf(stderr, "%s, closing socket and exiting...\n", msg);
+    close_socket();
     exit(1);
 }
 
@@ -49,7 +52,7 @@ typedef struct __attribute__((__packed__)) {
     uint16_t    peer_port;
 } Peer;
 
-Peer peer_init() {
+Peer peer_init(void) {
     Peer p;
     memset(&p, 0, sizeof(Peer));
     return p;
@@ -83,6 +86,31 @@ static Peer*    g_peers; // Known peer nodes.
 static uint16_t g_count; // Number of known peer nodes
 static uint16_t g_peers_capacity; // `g_peers` capacity
 
+/** Auxiliary */
+void close_socket(void) {
+    if (g_socket_fd >= 0) {
+        close(g_socket_fd);
+        fprintf(stderr, "Socket closed.\n");
+    }
+}
+
+/** Auxiliary */
+void handle_sigint(int sig) {
+    fprintf(stderr, "\nCaught signal %d (SIGINT). Closing socket and exiting...\n", sig);
+    close_socket();
+    exit(0);
+}
+
+/** Auxiliary */
+void setup_signal_handler() {
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = handle_sigint;
+    if (sigaction(SIGINT, &sa, NULL) < 0) {
+        syserr("sigaction failed");
+    }
+}
+
 void peer_add(const Peer *p) {
     if (g_count == UINT16_MAX) {
         syserr("Too many peers"); // TODO czy może coś innego zrobić.
@@ -95,26 +123,6 @@ void peer_add(const Peer *p) {
     }
 
     memcpy(&g_peers[g_count++], p, sizeof(Peer));
-}
-
-/** Auxiliary */
-void handle_sigint(int sig) {
-    fprintf(stderr, "\nCaught signal %d (SIGINT). Closing socket and exiting...\n", sig);
-    if (g_socket_fd >= 0) {
-        close(g_socket_fd);
-        fprintf(stderr, "Socket closed.\n");
-    }
-    exit(0);
-}
-
-/** Auxiliary */
-void setup_signal_handler() {
-    struct sigaction sa;
-    memset(&sa, 0, sizeof(sa));
-    sa.sa_handler = handle_sigint;
-    if (sigaction(SIGINT, &sa, NULL) < 0) {
-        syserr("sigaction failed");
-    }
 }
 
 void init_global() {
@@ -602,7 +610,7 @@ uint8_t receive_and_handle_hello_reply(struct sockaddr_in *peer_address, Peer **
     if (msg.count > 0) {
         *peers = malloc(msg.count * sizeof(Peer));
         if (*peers == NULL) syserr("malloc failed");
-        memcpy(*peers, buf + sizeof(Message), msg.count * sizeof(Peer));
+        memcpy(*peers, buf + sizeof(msg), msg.count * sizeof(Peer));
 
         fprintf(stderr, "Peers from HELLO_REPLY:\n");
         for (size_t i = 0; i < msg.count; ++i) {

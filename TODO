@@ -1,9 +1,7 @@
 ---- OTWARTE ----
 Zobaczyc, co na discordzie odpisali
-0. Kiedy dodaje się trzeci węzeł, to coś się psuje. Stestować
-    Czemu o odbiorcy (node3) address length to 0, a potem jakieś 23?
 0.1. Jak w końcu to HELLO_REPLY, jak z innymi? Czy zrobić jakąś klasę i podklasy, tak jak we Futureach? TAK
-        - nie miec PeerMessage, to bedzei po prostu w Peer
+        - nie miec PeerMessage, to bedzei po prostu w Peer DONE
 1.1.1. Co jeśli drugi raz dodajemy ten sam węzeł? (Sprawdzić treść oraz discorda) TO JEST NA DISCORDZIE, ZGLEBIC
 1.1.2 Połączyć te pierwsze węzły DONE
 1.1.2.1 Co jeśli u starego węzła nie starcza miejsca na nowego? Problem jest też taki, że establish_connection u starego robimy na końcu handle_hello.

@@ -48,7 +48,7 @@ void syserr(const char *msg) {
 typedef struct __attribute__((__packed__)) {
     uint8_t     peer_address_length;
     uint8_t     peer_address[16];
-    uint16_t    peer_port;
+    uint16_t    peer_port; // trzymane zawsze w big endianess
 } Peer;
 
 Peer peer_init(void) {
@@ -65,7 +65,7 @@ void peer_print(Peer *p) {
         fprintf(stderr, "%s%u", (i > 0 ? "." : ""), p->peer_address[i]);
     }
     fprintf(stderr, "\n");
-    fprintf(stderr, "  Port: %u\n", p->peer_port);
+    fprintf(stderr, "  Port: %u\n", ntohs(p->peer_port));
 }
 
 void peer_convert_to_network(Peer *p) {
@@ -543,54 +543,6 @@ void msg_convert_to_host(Message *msg) {
 // TODO te całe wysyłanie możnaby jakoś ujednolicić.
 // TODO dodać to cale oczekiwanie od 5 do 10 sekund
 
-// FIXME wątpliwości w sprawie rozmiaru
-int msg_send(Message *msg, const struct sockaddr_in *peer_address) {
-    msg_convert_to_network(msg);
-
-    size_t msg_size;
-    switch (msg->message) {
-        case MSG_HELLO:
-        case MSG_CONNECT:
-        case MSG_ACK_CONNECT:
-        case MSG_DELAY_REQUEST:
-        case MSG_GET_TIME:
-            msg_size = sizeof(Message);
-            break;
-
-        case MSG_SYNC_START:
-        case MSG_DELAY_RESPONSE:
-        case MSG_TIME:
-            msg_size = sizeof(SyncStartMessage);
-            break;
-
-        case MSG_HELLO_REPLY:
-            msg_size = sizeof(HelloReplyMessage);
-            break;
-
-        case MSG_LEADER:
-            msg_size = sizeof(LeaderMessage);
-            break;
-
-        default:
-            syserr("Unknown message type");
-    }
-    socklen_t addr_len = (socklen_t) sizeof(*peer_address);
-    return sendto(g_socket_fd, msg, msg_size, 0,
-                  (struct sockaddr *) peer_address, addr_len);
-}
-
-// NOTE nie wiedziałem gdzie to dać
-void log_sent_message(const char *log, const struct sockaddr_in *peer_address, const Message *msg, const ssize_t send_len) {
-    char ip_str[INET_ADDRSTRLEN];
-    if (inet_ntop(AF_INET, &peer_address->sin_addr, ip_str, sizeof(ip_str)) == NULL) {
-        syserr("inet_ntop failed");
-    }
-
-    fprintf(stderr, "Sent %s message (%zd bytes) to %s:%u\n", log, send_len, ip_str, ntohs(peer_address->sin_port));
-    msg_print(msg);
-    fprintf(stderr, "\n");
-}
-
 const char* get_log(const Message *msg) {
     switch (msg->message) {
         case MSG_HELLO:
@@ -641,6 +593,30 @@ void log_received_message(const struct sockaddr_in *peer_address, const Message 
     fprintf(stderr, "\n");
 }
 
+// NOTE nie wiedziałem gdzie to dać
+void log_sent_message(const struct sockaddr_in *peer_address, const Message *msg, const ssize_t send_len) {
+    char ip_str[INET_ADDRSTRLEN];
+    if (inet_ntop(AF_INET, &peer_address->sin_addr, ip_str, sizeof(ip_str)) == NULL) {
+        syserr("inet_ntop failed");
+    }
+
+    const char *log = get_log(msg);
+    fprintf(stderr, "Sent %s message (%zd bytes) to %s:%u\n", log, send_len, ip_str, ntohs(peer_address->sin_port));
+    msg_print(msg);
+    fprintf(stderr, "\n");
+}
+
+void log_sending_peers(const size_t msg_size) {
+    size_t offset = msg_size;
+    fprintf(stderr, "Sending peers:\n");
+    for (size_t i = 0; i < g_count; ++i) {
+        Peer *p = (Peer *) (g_buf + offset);
+        peer_print(p);
+        // p->peer_port = htons(p->peer_port);
+        offset += sizeof(Peer);
+    }
+}
+
 // NOTE Daj w inne miejsce
 int validate_received_length(const ssize_t recv_len, const uint8_t message_type) {
     // NOTE Program nie powinien się wywalać przy jednym złym receive, ale początkowo tak zróbmy dla świętego spokoju i debugowania
@@ -679,6 +655,143 @@ int validate_received_data(const struct sockaddr_in *peer_address, const ssize_t
     return ret; // NOTE Potem, gdy nie będziemy rzucali syserr w przypadku recv_len < msg_size, będziemy mogli jakoś to lepiej obsłużyc
 }
 
+// TODO Usystematyzować wysyłanie
+
+// TODO Możnaby to jakoś ujednolicić, żeby dołączający z _ar_provided też mógł użyć takiej funkcji
+void establish_connection(const struct sockaddr_in *peer_address) {
+    uint8_t ip[16];
+    memset(ip, 0, sizeof(ip));
+    memcpy(ip, &peer_address->sin_addr, IPV4_ADDR_LEN);
+    uint16_t port = ntohs(peer_address->sin_port);
+
+    Peer p;
+    p.peer_address_length = IPV4_ADDR_LEN;
+    memcpy(p.peer_address, ip, IPV4_ADDR_LEN);
+    p.peer_port = port;
+
+    peer_add(&p);
+}
+
+/** `msg_dest` should not be initialized. */
+Message* msg_copy(const Message *msg_src) {
+    // NOTE możemy opakować tego malloca
+    Message *msg_cp = malloc(g_msg_size[msg_src->message]);
+    if (msg_cp == NULL) {
+        syserr("malloc failed in msg_copy");
+    }
+
+    memcpy(msg_cp, msg_src, g_msg_size[msg_src->message]);
+    return msg_cp;
+}
+
+// NOTE za długa nazwa
+// NOTE można by to uogólnić, jednak w sumie jakiekolwiek uogólnienie to po prostu memcpy :)
+size_t prepare_buffer_for_sending_hello_reply(const HelloReplyMessage *msg) {
+    size_t msg_len = sizeof(HelloReplyMessage); // size_t msg_len = g_msg_size[msg->base.message];
+    size_t peers_len = g_count * sizeof(Peer);
+    size_t total_len = msg_len + peers_len;
+
+    // Load message and peers to buffer
+    memcpy(g_buf, msg, msg_len);
+    memcpy(g_buf + msg_len, g_peers, peers_len);
+
+    log_sending_peers(msg_len);
+    return total_len;
+}
+
+/**
+ * Jeśli nie bierzemy z g_buf: len=-1
+ */
+ssize_t send_wrap(const struct sockaddr_in *peer_address, const Message *msg, ssize_t len) {
+    socklen_t addr_len = (socklen_t) sizeof(*peer_address);
+    ssize_t send_len;
+
+    if (len < 0) {
+        send_len = sendto(g_socket_fd, msg, g_msg_size[msg->message], 0,
+            (struct sockaddr *) peer_address, addr_len);
+    } else {
+        send_len = sendto(g_socket_fd, g_buf, len, 0,
+            (struct sockaddr *) peer_address, addr_len);
+    }
+
+    if (send_len < 0) syserr("sendto fail"); // NOTE (chyba) Nie powinno się wywalać
+    return send_len;
+}
+
+// TODO widać powtarzający się schemat, można to ujednolicić
+
+/**
+ * Jeśli nie bierzemy z g_buf: len=-1
+ */
+ssize_t send_message(const struct sockaddr_in *peer_address, const Message *msg, ssize_t len) {
+    if (len < 0) {
+        
+    }
+    
+    Message *conv_msg = msg_copy(msg);
+    
+    if (len < 0) {
+        msg_convert_to_network(conv_msg);
+    } else {
+        msg_convert_to_host(conv_msg);
+    }
+
+    ssize_t send_len = send_wrap(peer_address, conv_msg, len);
+    if (send_len > 0 ) log_sent_message(peer_address, msg, send_len);
+
+    free(conv_msg);
+    return send_len;
+}
+
+ssize_t send_hello(const struct sockaddr_in *peer_address) {
+    HelloMessage msg = {
+        .base.message = MSG_HELLO
+    };
+
+    return send_message(peer_address, (Message *)&msg, -1);
+}
+
+ssize_t send_hello_reply(const struct sockaddr_in *peer_address) {
+    HelloReplyMessage msg = {
+        .base.message = MSG_HELLO_REPLY,
+        .count        = g_count,
+    };
+
+    size_t len = prepare_buffer_for_sending_hello_reply(&msg);
+    return send_message(peer_address, (Message *)&msg, len);
+}
+
+ssize_t send_connect(struct sockaddr_in *peer_address) {
+    ConnectMessage msg = {
+        .base.message = MSG_CONNECT
+    };
+
+    return send_message(peer_address, (Message *)&msg, -1);
+}
+
+// TODO lepsza nazwa
+void _connect(Peer *p) {
+    if (p->peer_address_length != IPV4_ADDR_LEN) syserr("Wrong address");
+
+    // TODO nie da sie sprytniej?
+    char peer_ip_str[INET_ADDRSTRLEN];
+    if (inet_ntop(AF_INET, (struct in_addr *)p->peer_address, peer_ip_str, INET_ADDRSTRLEN) == NULL) {
+        syserr("inet_ntop failed");
+    }
+
+    struct sockaddr_in peer_address = get_peer_address(peer_ip_str, ntohs(p->peer_port));
+    send_connect(&peer_address);
+}
+
+
+ssize_t send_ack_connect(const struct sockaddr_in *peer_address) {
+    AckConnectMessage msg = {
+        .base.message = MSG_ACK_CONNECT
+    };
+
+    return send_message(peer_address, (Message *)&msg, -1);
+}
+
 ssize_t receive_message(struct sockaddr_in *peer_address) {
     socklen_t addr_len = (socklen_t) sizeof(*peer_address);
     ssize_t recv_len = recvfrom(g_socket_fd, g_buf, sizeof(g_buf), 0,
@@ -698,8 +811,8 @@ uint8_t receive_and_handle_hello_reply(struct sockaddr_in *peer_address, Peer **
     // Deserialize Message structure.
     memcpy(&msg, g_buf, sizeof(HelloReplyMessage));
     msg_convert_to_host((Message *)&msg);
-    if (msg.base.message != MSG_HELLO_REPLY) syserr("Received not reply? WTH?");
     log_received_message(peer_address, (Message *)&msg, recv_len);
+    // if (msg.base.message != MSG_HELLO_REPLY) syserr("Received not reply? WTH?");
 
     // Copy contents of peers
     if (msg.count > 0) {
@@ -709,7 +822,7 @@ uint8_t receive_and_handle_hello_reply(struct sockaddr_in *peer_address, Peer **
 
         fprintf(stderr, "Peers from HELLO_REPLY:\n");
         for (size_t i = 0; i < msg.count; ++i) {
-            peer_convert_to_host(&(*peers)[i]);
+            // peer_convert_to_host(&(*peers)[i]);
             peer_print(&(*peers)[i]);
             // FIXME Validate!
         }
@@ -720,133 +833,10 @@ uint8_t receive_and_handle_hello_reply(struct sockaddr_in *peer_address, Peer **
     return msg.count;
 }
 
-// TODO Usystematyzować wysyłanie
-
-void send_hello(struct sockaddr_in *peer_address) {
-    HelloMessage msg = {
-        .base.message = MSG_HELLO
-    };
-    ssize_t send_len = msg_send((Message *)&msg, peer_address);
-    if (send_len < 0) syserr("sendto HELLO");
-
-    msg_convert_to_host((Message *)&msg); // w msg_send zostalo przekonwertowane do network :(
-    log_sent_message("HELLO", peer_address, (Message *)&msg, send_len);
-}
-
-void send_connect(struct sockaddr_in *peer_address) {
-    ConnectMessage msg = {
-        .base.message = MSG_CONNECT
-    };
-    ssize_t send_len = msg_send((Message *)&msg, peer_address);
-    if (send_len < 0) syserr("sendto CONNECT");
-    msg_convert_to_host((Message *)&msg); // w msg_send zostalo przekonwertowane do network :(
-    log_sent_message("CONNECT", peer_address, (Message *)&msg, send_len);
-}
-
-void send_ack_connect(const struct sockaddr_in *peer_address) {
-    AckConnectMessage msg = {
-        .base.message = MSG_ACK_CONNECT
-    };
-    ssize_t send_len = msg_send((Message *)&msg, peer_address);
-    if (send_len < 0) syserr("sendto ACK CONNECT");
-    msg_convert_to_host((Message *)&msg); // w msg_send zostalo przekonwertowane do network :(
-    log_sent_message("ACK_CONNECT", peer_address, (Message *)&msg, send_len);
-}
-
-// TODO lepsza nazwa
-void _connect(Peer *p) {
-    if (p->peer_address_length != IPV4_ADDR_LEN) syserr("Wrong address");
-
-    // TODO nie da sie sprytniej?
-    char peer_ip_str[INET_ADDRSTRLEN];
-    if (inet_ntop(AF_INET, (struct in_addr *)p->peer_address, peer_ip_str, INET_ADDRSTRLEN) == NULL) {
-        syserr("inet_ntop failed");
-    }
-
-    struct sockaddr_in peer_address = get_peer_address(peer_ip_str, p->peer_port);
-    send_connect(&peer_address);
-}
-
-void join_network(ProgramArgs args) {
-    if (!args._ar_provided) return;
-
-    struct sockaddr_in peer_address = get_peer_address(args.peer_address, args.peer_port);
-    Peer *peers = NULL;
-
-    Peer first;
-    first.peer_address_length = IPV4_ADDR_LEN;
-    if (inet_pton(AF_INET, args.peer_address, first.peer_address) != 1) {
-        syserr("inet_pton failed");
-    }
-    first.peer_port = args.peer_port;
-    peer_add(&first);
-
-    send_hello(&peer_address);
-    uint8_t count = receive_and_handle_hello_reply(&peer_address, &peers);
-
-    for (uint8_t i = 0; i < count; ++i) {
-        _connect(&peers[i]);
-    }
-    free(peers);
-}
-
-// ==== RECEIVERS ==== // Ofc słaba nazwa :)
-
-// TODO Możnaby to jakoś ujednolicić, żeby dołączający z _ar_provided też mógł użyć takiej funkcji
-void establish_connection(const struct sockaddr_in *peer_address) {
-    uint8_t ip[16];
-    memset(ip, 0, sizeof(ip));
-    memcpy(ip, &peer_address->sin_addr, IPV4_ADDR_LEN);
-    uint16_t port = ntohs(peer_address->sin_port);
-
-    Peer p;
-    p.peer_address_length = IPV4_ADDR_LEN;
-    memcpy(p.peer_address, ip, IPV4_ADDR_LEN);
-    p.peer_port = port;
-
-    peer_add(&p);
-}
-
-ssize_t send_hello_reply(const struct sockaddr_in *peer_address, const HelloReplyMessage *hrmsg) {
-    HelloReplyMessage msg;
-    memcpy(&msg, hrmsg, sizeof(*hrmsg));
-    msg_convert_to_network((Message *)&msg);
-
-    size_t msg_size = sizeof(HelloReplyMessage);
-    size_t peers_size = g_count * sizeof(Peer);
-    size_t total_size = msg_size + peers_size;
-
-    memcpy(g_buf, &msg, msg_size);
-    memcpy(g_buf + msg_size, g_peers, peers_size);
-    
-    size_t offset = msg_size;
-    fprintf(stderr, "Sending peers:\n");
-    for (size_t i = 0; i < g_count; ++i) {
-        Peer *p = (Peer *) (g_buf + offset);
-        peer_print(p);
-        p->peer_port = htons(p->peer_port);
-        offset += sizeof(Peer);
-    }
-
-    socklen_t addr_len = (socklen_t) sizeof(*peer_address);
-    ssize_t send_len = sendto(g_socket_fd, g_buf, total_size, 0,
-                              (struct sockaddr *) peer_address, addr_len);
-    
-    return send_len;
-}
-
 // TODO czy mozna sensownie ujednolicic wysylanie, aby to tez mozna bylo dac do funkcji `msg_send`?
 // TODO Posprzątać
 void handle_hello(const struct sockaddr_in *peer_address) {
-    HelloReplyMessage msg = {
-        .base.message = MSG_HELLO_REPLY,
-        .count        = g_count,
-    };
-
-    ssize_t send_len = send_hello_reply(peer_address, &msg);
-    if (send_len < 0) syserr("sendto HELLO REPLY");
-    
-    log_sent_message("HELLO_REPLY", peer_address, (Message *)&msg, send_len);
+    send_hello_reply(peer_address);
     establish_connection(peer_address); // Robimy to na koniec, żeby uniknąć tego w HELLO_REPLY
 }
 
@@ -973,6 +963,29 @@ void listen_for_messages() {
         ssize_t recv_len = receive_message(&peer_address);
         handle_message(&peer_address, recv_len);
     }
+}
+
+void join_network(ProgramArgs args) {
+    if (!args._ar_provided) return;
+
+    struct sockaddr_in peer_address = get_peer_address(args.peer_address, args.peer_port);
+    Peer *peers = NULL;
+
+    Peer first;
+    first.peer_address_length = IPV4_ADDR_LEN;
+    if (inet_pton(AF_INET, args.peer_address, first.peer_address) != 1) {
+        syserr("inet_pton failed");
+    }
+    first.peer_port = args.peer_port;
+    peer_add(&first);
+
+    send_hello(&peer_address);
+    uint8_t count = receive_and_handle_hello_reply(&peer_address, &peers);
+
+    for (uint8_t i = 0; i < count; ++i) {
+        _connect(&peers[i]);
+    }
+    free(peers);
 }
 
 int main(int argc, char* argv[]) {

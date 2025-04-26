@@ -35,7 +35,7 @@
 
 #define IPV4_ADDR_LEN 4
 
-#define MAX_DATA 65535 // TODO lepsza nazwa
+#define BUF_SIZE 65535 // FIXME myślę, że więcej
 
 void close_socket(void);
 
@@ -85,6 +85,7 @@ static int      g_socket_fd;
 static Peer*    g_peers; // Known peer nodes.
 static uint16_t g_count; // Number of known peer nodes
 static uint16_t g_peers_capacity; // `g_peers` capacity
+static uint8_t  g_buf[BUF_SIZE] = {0}; // Buffer for read operations.
 
 /** Auxiliary */
 void close_socket(void) {
@@ -590,18 +591,17 @@ void validate_received_length(const ssize_t recv_len) {
 
 // TODO ta funkcja jest aczytalna
 uint8_t receive_and_handle_hello_reply(struct sockaddr_in *peer_address, Peer **peers) {
-    uint8_t buf[MAX_DATA];
     HelloReplyMessage msg;
     socklen_t addr_len = (socklen_t) sizeof(*peer_address);
 
     // Receive HELLO REPLY message.
-    ssize_t recv_len = recvfrom(g_socket_fd, buf, sizeof(buf), 0,
+    ssize_t recv_len = recvfrom(g_socket_fd, g_buf, sizeof(g_buf), 0,
                                 (struct sockaddr *) peer_address, &addr_len);
     validate_received_length(recv_len);
     if (recv_len < (ssize_t) sizeof(HelloReplyMessage)) syserr("Za mało w hello reply");
 
     // Deserialize Message structure.
-    memcpy(&msg, buf, sizeof(HelloReplyMessage));
+    memcpy(&msg, g_buf, sizeof(HelloReplyMessage));
     msg_convert_to_host((Message *)&msg);
     if (msg.base.message != MSG_HELLO_REPLY) syserr("Received not reply? WTH?");
     log_received_message("HELLO REPLY", peer_address, (Message *)&msg, recv_len);
@@ -610,7 +610,7 @@ uint8_t receive_and_handle_hello_reply(struct sockaddr_in *peer_address, Peer **
     if (msg.count > 0) {
         *peers = malloc(msg.count * sizeof(Peer));
         if (*peers == NULL) syserr("malloc failed");
-        memcpy(*peers, buf + sizeof(msg), msg.count * sizeof(Peer));
+        memcpy(*peers, g_buf + sizeof(msg), msg.count * sizeof(Peer));
 
         fprintf(stderr, "Peers from HELLO_REPLY:\n");
         for (size_t i = 0; i < msg.count; ++i) {
@@ -718,26 +718,22 @@ ssize_t send_hello_reply(const struct sockaddr_in *peer_address, const HelloRepl
     size_t peers_size = g_count * sizeof(Peer);
     size_t total_size = msg_size + peers_size;
 
-    uint8_t *buf = (uint8_t *)malloc(total_size);
-    if (buf == NULL) syserr("malloc");
-
-    memcpy(buf, &msg, msg_size);
-    memcpy(buf + msg_size, g_peers, peers_size);
+    memcpy(g_buf, &msg, msg_size);
+    memcpy(g_buf + msg_size, g_peers, peers_size);
     
     size_t offset = msg_size;
     fprintf(stderr, "Sending peers:\n");
     for (size_t i = 0; i < g_count; ++i) {
-        Peer *p = (Peer *) (buf + offset);
+        Peer *p = (Peer *) (g_buf + offset);
         peer_print(p);
         p->peer_port = htons(p->peer_port);
         offset += sizeof(Peer);
     }
 
     socklen_t addr_len = (socklen_t) sizeof(*peer_address);
-    ssize_t send_len = sendto(g_socket_fd, buf, total_size, 0,
+    ssize_t send_len = sendto(g_socket_fd, g_buf, total_size, 0,
                               (struct sockaddr *) peer_address, addr_len);
     
-    free(buf);
     return send_len;
 }
 
@@ -835,11 +831,11 @@ size_t msg_determine_size(const Message *msg) {
     return msg_size;
 }
 
-void msg_load(Message **msg, const uint8_t *buf) {
+void msg_load(Message **msg) {
     *msg = malloc(sizeof(Message));
     if (*msg == NULL) syserr("malloc msg_load");
     
-    memcpy(*msg, buf, sizeof(Message));
+    memcpy(*msg, g_buf, sizeof(Message));
     size_t msg_size = msg_determine_size(*msg);
 
     if (msg_size > sizeof(Message)) {
@@ -851,28 +847,24 @@ void msg_load(Message **msg, const uint8_t *buf) {
         }
 
         *msg = tmp_msg;
-        memcpy((uint8_t *)*msg + sizeof(Message), buf + sizeof(Message), msg_size - sizeof(Message));
+        memcpy((uint8_t *)*msg + sizeof(Message), g_buf + sizeof(Message), msg_size - sizeof(Message));
     }
 }
 
 void listen_for_messages() {
-    uint8_t buf[MAX_DATA];
-
     struct sockaddr_in peer_address;
 
     while (true) {
-        memset(buf, 0, sizeof(buf)); // NOTE Czy potrzebne?
         socklen_t addr_len = (socklen_t) sizeof(peer_address);
 
         // Odbiór danych
-        ssize_t recv_len = recvfrom(g_socket_fd, buf, sizeof(buf), 0,
+        ssize_t recv_len = recvfrom(g_socket_fd, g_buf, sizeof(g_buf), 0,
                                     (struct sockaddr *) &peer_address, &addr_len);
         validate_received_length(recv_len);
 
         // Interpretacja odebranych danych jako struktura Message
-        // NOTE Shady
         Message *msg;
-        msg_load(&msg, buf);
+        msg_load(&msg);
 
         // Validate peer_address contents.
         validate_address(&peer_address);

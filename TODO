@@ -1,9 +1,5 @@
 ---- OTWARTE ----
-Zobaczyc, co na discordzie odpisali
-0.1. Jak w końcu to HELLO_REPLY, jak z innymi? Czy zrobić jakąś klasę i podklasy, tak jak we Futureach? TAK
-        - nie miec PeerMessage, to bedzei po prostu w Peer DONE
 1.1.1. Co jeśli drugi raz dodajemy ten sam węzeł? (Sprawdzić treść oraz discorda) TO JEST NA DISCORDZIE, ZGLEBIC
-1.1.2 Połączyć te pierwsze węzły DONE
 1.1.2.1 Co jeśli u starego węzła nie starcza miejsca na nowego? Problem jest też taki, że establish_connection u starego robimy na końcu handle_hello.
 1.2. Posprzątać!
 1.2.1. Dodać consty
@@ -25,6 +21,9 @@ NA KONIEC
 1. Modularność - biblioteki.
 2. Klasy i structy i fajność, jedność.
 
+NOTATKI
+1. Aktualnie "zaniedbujemy" g_buf: nie zerujemy go przed read-em, nie ustawiamy koncowych bajtow na 0.
+
 ---- ROZWIĄZANE ----
 1. Rozdzielamy HELLO REPLY na dwa komunikaty?
     ODP: Nie, nielegalne
@@ -34,4 +33,8 @@ NA KONIEC
     ODP: Mnie się wydaje, że tak, w końcu w treści napisane jest, że te węzły "nawiązały komunikację". Ale dla pewności można sprawdzić discorda.
 4. Jak sprawdzać dane podane na wejściu, szczególnie adresy. Z jednej strony przy pierwszej próbie nawiazania polaczenia funkcja sie wywali, z drugiej czy nie powinnismy o tym wiedziec zawczasu?
     ODP: Peczarski pisze, że poprawność sprawdzi funkcja wysyłająca
+0.1. Jak w końcu to HELLO_REPLY, jak z innymi? Czy zrobić jakąś klasę i podklasy, tak jak we Futureach? TAK
+        - nie miec PeerMessage, to bedzei po prostu w Peer DONE
+1.1.2 Połączyć te pierwsze węzły DONE
+
 

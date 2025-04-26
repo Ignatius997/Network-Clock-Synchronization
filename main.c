@@ -98,16 +98,33 @@ void close_socket(void) {
 void handle_sigint(int sig) {
     fprintf(stderr, "\nCaught signal %d (SIGINT). Closing socket and exiting...\n", sig);
     close_socket();
-    exit(0);
+    exit(130);
+}
+
+void handle_quit(int sig) {
+    fprintf(stderr, "\nCaught signal %d (EOF). Printing all peers:\n", sig);
+    for (uint16_t i = 0; i < g_count; ++i) {
+        peer_print(&g_peers[i]);
+    }
+    fprintf(stderr, "\n");
 }
 
 /** Auxiliary */
 void setup_signal_handler() {
     struct sigaction sa;
     memset(&sa, 0, sizeof(sa));
+
+    // Obsługa SIGINT
     sa.sa_handler = handle_sigint;
     if (sigaction(SIGINT, &sa, NULL) < 0) {
-        syserr("sigaction failed");
+        syserr("sigaction failed for SIGINT");
+    }
+
+    // Obsługa SIGQUIT (EOF)
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = handle_quit;
+    if (sigaction(SIGQUIT, &sa, NULL) < 0) {
+        syserr("sigaction failed for SIGQUIT");
     }
 }
 
@@ -612,7 +629,6 @@ void log_sending_peers(const size_t msg_size) {
     for (size_t i = 0; i < g_count; ++i) {
         Peer *p = (Peer *) (g_buf + offset);
         peer_print(p);
-        // p->peer_port = htons(p->peer_port);
         offset += sizeof(Peer);
     }
 }
@@ -662,12 +678,11 @@ void establish_connection(const struct sockaddr_in *peer_address) {
     uint8_t ip[16];
     memset(ip, 0, sizeof(ip));
     memcpy(ip, &peer_address->sin_addr, IPV4_ADDR_LEN);
-    uint16_t port = ntohs(peer_address->sin_port);
 
     Peer p;
     p.peer_address_length = IPV4_ADDR_LEN;
     memcpy(p.peer_address, ip, IPV4_ADDR_LEN);
-    p.peer_port = port;
+    p.peer_port = peer_address->sin_port; // NOTE bez konwertowania
 
     peer_add(&p);
 }
@@ -686,21 +701,26 @@ Message* msg_copy(const Message *msg_src) {
 
 // NOTE za długa nazwa
 // NOTE można by to uogólnić, jednak w sumie jakiekolwiek uogólnienie to po prostu memcpy :)
-size_t prepare_buffer_for_sending_hello_reply(const HelloReplyMessage *msg) {
-    size_t msg_len = sizeof(HelloReplyMessage); // size_t msg_len = g_msg_size[msg->base.message];
+size_t prepare_buffer_for_sending_hello_reply(const Message *msg) {
+    size_t msg_len = g_msg_size[msg->message];
     size_t peers_len = g_count * sizeof(Peer);
     size_t total_len = msg_len + peers_len;
 
+    Message *conv_msg = msg_copy(msg);
+    msg_convert_to_network(conv_msg);
+
     // Load message and peers to buffer
-    memcpy(g_buf, msg, msg_len);
+    memcpy(g_buf, conv_msg, msg_len);
     memcpy(g_buf + msg_len, g_peers, peers_len);
 
     log_sending_peers(msg_len);
+    free(conv_msg);
     return total_len;
 }
 
 /**
  * Jeśli nie bierzemy z g_buf: len=-1
+ * Jeśli bierzemy z g_buf, to msg nie ma znaczenia
  */
 ssize_t send_wrap(const struct sockaddr_in *peer_address, const Message *msg, ssize_t len) {
     socklen_t addr_len = (socklen_t) sizeof(*peer_address);
@@ -728,12 +748,10 @@ ssize_t send_message(const struct sockaddr_in *peer_address, const Message *msg,
         
     }
     
-    Message *conv_msg = msg_copy(msg);
-    
+    Message *conv_msg = NULL;
     if (len < 0) {
+        conv_msg = msg_copy(msg);
         msg_convert_to_network(conv_msg);
-    } else {
-        msg_convert_to_host(conv_msg);
     }
 
     ssize_t send_len = send_wrap(peer_address, conv_msg, len);
@@ -757,7 +775,7 @@ ssize_t send_hello_reply(const struct sockaddr_in *peer_address) {
         .count        = g_count,
     };
 
-    size_t len = prepare_buffer_for_sending_hello_reply(&msg);
+    size_t len = prepare_buffer_for_sending_hello_reply((Message *)&msg);
     return send_message(peer_address, (Message *)&msg, len);
 }
 
@@ -976,7 +994,7 @@ void join_network(ProgramArgs args) {
     if (inet_pton(AF_INET, args.peer_address, first.peer_address) != 1) {
         syserr("inet_pton failed");
     }
-    first.peer_port = args.peer_port;
+    first.peer_port = htons(args.peer_port);
     peer_add(&first);
 
     send_hello(&peer_address);

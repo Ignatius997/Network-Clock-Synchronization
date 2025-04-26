@@ -1,6 +1,6 @@
 ---- OTWARTE ----
 TODO poprawić te konwersje w wysyłaniu w przypadku helloreply
-0. Co z tym addr_len?
+TODO trzymac wszystkie pola w Message ZAWSZE w porządku sieciowym
 1.1.1. Co jeśli drugi raz dodajemy ten sam węzeł? (Sprawdzić treść oraz discorda) TO JEST NA DISCORDZIE, ZGLEBIC
 1.1.2.1 Co jeśli u starego węzła nie starcza miejsca na nowego? Problem jest też taki, że establish_connection u starego robimy na końcu handle_hello.
 1.2. Posprzątać!

@@ -10,6 +10,8 @@ fi
 my_port=$1
 peer_port=$2
 
+clear
+
 # Build the command based on the arguments
 if [ -z "$peer_port" ]; then
     cmd="./netclocksync -b 127.0.0.1 -p $my_port"

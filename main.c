@@ -31,7 +31,6 @@
 #define MSG_LEADER          21
 #define MSG_GET_TIME        31
 #define MSG_TIME            32
-#define MSG_PEER            41
 
 #define IPV4_ADDR_LEN 4
 
@@ -131,7 +130,6 @@ void init_global() {
     g_peers_capacity = 1;
     g_peers = (Peer*) malloc(g_peers_capacity * sizeof(Peer));
     if (g_peers == NULL) syserr("malloc g_peers");
-    // TODO sprawdź, czy alokacja się powiodła
 }
 
 uint32_t get_address(const char *addr) {
@@ -152,10 +150,8 @@ void init_addr(struct sockaddr_in *bind_address, const char *addr, const uint16_
     bind_address->sin_port = htons(port);
 }
 
-// TODO obsłużyć przypadek bez podanego portu
+// TODO obsłużyć przypadek bez podanego portu (chyba obsluzony, bo port wtedy jest rowny 0)
 // TODO przenieść w inne miejsce
-// TODO lepsza nazwa
-// TODO rozbić socket z bind_address?
 void init_socket(struct sockaddr_in *bind_address, const char *addr, const uint16_t port) {
     g_socket_fd = socket(AF_INET, SOCK_DGRAM, 0);
     if (g_socket_fd < 0) {
@@ -251,7 +247,6 @@ uint16_t read_port(char const *string) {
     return (uint16_t) port;
 }
 
-// TODO Komentarz.
 void args_load_value(char *arg, const char opt, ProgramArgs *program_args) {
     switch (opt) {
         case ARGOPT_BIND_ADDRESS:
@@ -275,7 +270,6 @@ void args_load_value(char *arg, const char opt, ProgramArgs *program_args) {
     }
 }
 
-// TODO Komentarz.
 void args_parse(int argc, char* argv[], ProgramArgs *program_args) {
     if ((argc-1) % 2 == 1) syserr("Incorrect arguments: odd number..."); // TODO Better message. But should we even consider it an error?
     
@@ -314,7 +308,6 @@ void args_parse(int argc, char* argv[], ProgramArgs *program_args) {
     }
 }
 
-// TODO komentarz.
 /**
  * Passed by pointer to print accurate address.
  */
@@ -379,6 +372,56 @@ typedef struct __attribute__((__packed__)) {
     uint8_t  synchronized;
     uint64_t timestamp;
 } TimeMessage;
+
+// NOTE Tymczasowe, to się potem ulepszy.
+static size_t g_msg_size[100] = {0};
+void initialize_message_sizes(void) {
+    g_msg_size[MSG_HELLO] = sizeof(HelloMessage);
+    g_msg_size[MSG_HELLO_REPLY] = sizeof(HelloReplyMessage);
+    g_msg_size[MSG_CONNECT] = sizeof(ConnectMessage);
+    g_msg_size[MSG_ACK_CONNECT] = sizeof(AckConnectMessage);
+    g_msg_size[MSG_SYNC_START] = sizeof(SyncStartMessage);
+    g_msg_size[MSG_DELAY_REQUEST] = sizeof(DelayRequestMessage);
+    g_msg_size[MSG_DELAY_RESPONSE] = sizeof(DelayResponseMessage);
+    g_msg_size[MSG_LEADER] = sizeof(LeaderMessage);
+    g_msg_size[MSG_GET_TIME] = sizeof(GetTimeMessage);
+    g_msg_size[MSG_TIME] = sizeof(TimeMessage);
+}
+
+size_t msg_determine_size(const Message *msg) {
+    return g_msg_size[msg->message];
+
+    // size_t msg_size;
+
+    // switch (msg->message) {
+    //     case MSG_HELLO:
+    //     case MSG_CONNECT:
+    //     case MSG_ACK_CONNECT:
+    //     case MSG_DELAY_REQUEST:
+    //     case MSG_GET_TIME:
+    //         msg_size = sizeof(Message);
+    //         break;
+
+    //     case MSG_SYNC_START:
+    //     case MSG_DELAY_RESPONSE:
+    //     case MSG_TIME:
+    //         msg_size =  sizeof(SyncStartMessage);
+    //         break;
+
+    //     case MSG_HELLO_REPLY:
+    //         msg_size = sizeof(HelloReplyMessage);
+    //         break;
+
+    //     case MSG_LEADER:
+    //         msg_size = sizeof(LeaderMessage);
+    //         break;
+
+    //     default:
+    //         syserr("Unknown message type");
+    // }
+
+    // return msg_size;
+}
 
 // TODO można skrócić
 void msg_print(const Message *msg) {
@@ -536,6 +579,84 @@ int msg_send(Message *msg, const struct sockaddr_in *peer_address) {
                   (struct sockaddr *) peer_address, addr_len);
 }
 
+// NOTE nie wiedziałem gdzie to dać
+void log_sent_message(const char *log, const struct sockaddr_in *peer_address, const Message *msg, const ssize_t send_len) {
+    char ip_str[INET_ADDRSTRLEN];
+    if (inet_ntop(AF_INET, &peer_address->sin_addr, ip_str, sizeof(ip_str)) == NULL) {
+        syserr("inet_ntop failed");
+    }
+
+    fprintf(stderr, "Sent %s message (%zd bytes) to %s:%u\n", log, send_len, ip_str, ntohs(peer_address->sin_port));
+    msg_print(msg);
+    fprintf(stderr, "\n");
+}
+
+const char* get_log(const Message *msg) {
+    switch (msg->message) {
+        case MSG_HELLO:
+            return "MSG_HELLO";
+
+        case MSG_HELLO_REPLY:
+            return "MSG_HELLO_REPLY";
+
+        case MSG_CONNECT:
+            return "MSG_CONNECT";
+
+        case MSG_ACK_CONNECT:
+            return "MSG_ACK_CONNECT";
+
+        case MSG_SYNC_START:
+            return "MSG_SYNC_START";
+
+        case MSG_DELAY_REQUEST:
+            return "MSG_DELAY_REQUEST";
+
+        case MSG_DELAY_RESPONSE:
+            return "MSG_DELAY_RESPONSE";
+
+        case MSG_LEADER:
+            return "MSG_LEADER";
+
+        case MSG_GET_TIME:
+            return "MSG_GET_TIME";
+
+        case MSG_TIME:
+            return "MSG_TIME";
+
+        default:
+            return "UNKNOWN";
+    }
+}
+
+// NOTE nie wiedziałem gdzie to dać
+void log_received_message(const struct sockaddr_in *peer_address, const Message *msg, const ssize_t recv_len) {
+    char ip_str[INET_ADDRSTRLEN];
+    if (inet_ntop(AF_INET, &peer_address->sin_addr, ip_str, sizeof(ip_str)) == NULL) {
+        syserr("inet_ntop failed");
+    }
+
+    const char *log = get_log(msg);
+    fprintf(stderr, "Received %s message (%zd bytes) from %s:%u\n", log, recv_len, ip_str, ntohs(peer_address->sin_port));
+    msg_print(msg);
+    fprintf(stderr, "\n");
+}
+
+// NOTE Daj w inne miejsce
+int validate_received_length(const ssize_t recv_len, const uint8_t message_type) {
+    // NOTE Program nie powinien się wywalać przy jednym złym receive, ale początkowo tak zróbmy dla świętego spokoju i debugowania
+    
+    if (recv_len < 0) {
+        syserr("recvfrom failed");
+    }
+
+    if (recv_len < (ssize_t) g_msg_size[message_type]) {
+        syserr("recvfrom less bytes than message size."); // Można dodać rodzaj msg
+        return 1;
+    }
+
+    return 0; // NOTE Na przyszłość (patrz linijka wyżej).
+}
+
 // NOTE Daj w inne miejsce
 void validate_address(const struct sockaddr_in *addr) {
     if (addr->sin_family != AF_INET) {
@@ -552,59 +673,33 @@ void validate_address(const struct sockaddr_in *addr) {
     // }
 }
 
-// NOTE nie wiedziałem gdzie to dać
-void log_sent_message(const char *log, const struct sockaddr_in *peer_address, const Message *msg, const ssize_t send_len) {
-    char ip_str[INET_ADDRSTRLEN];
-    if (inet_ntop(AF_INET, &peer_address->sin_addr, ip_str, sizeof(ip_str)) == NULL) {
-        syserr("inet_ntop failed");
-    }
-
-    fprintf(stderr, "Sent %s message (%zd bytes) to %s:%u\n", log, send_len, ip_str, ntohs(peer_address->sin_port));
-    msg_print(msg);
-    fprintf(stderr, "\n");
+int validate_received_data(const struct sockaddr_in *peer_address, const ssize_t recv_len, const uint8_t message_type) {
+    int ret = validate_received_length(recv_len, message_type);
+    validate_address(peer_address);
+    return ret; // NOTE Potem, gdy nie będziemy rzucali syserr w przypadku recv_len < msg_size, będziemy mogli jakoś to lepiej obsłużyc
 }
 
-// NOTE nie wiedziałem gdzie to dać
-void log_received_message(const char *log, const struct sockaddr_in *peer_address, const Message *msg, const ssize_t recv_len) {
-    char ip_str[INET_ADDRSTRLEN];
-    if (inet_ntop(AF_INET, &peer_address->sin_addr, ip_str, sizeof(ip_str)) == NULL) {
-        syserr("inet_ntop failed");
-    }
+ssize_t receive_message(struct sockaddr_in *peer_address) {
+    socklen_t addr_len = (socklen_t) sizeof(*peer_address);
+    ssize_t recv_len = recvfrom(g_socket_fd, g_buf, sizeof(g_buf), 0,
+                                (struct sockaddr *) peer_address, &addr_len);
+    int val = validate_received_data(peer_address, recv_len, g_buf[0]);
+    (void)val; // NOTE nieużyta zmienna
 
-    fprintf(stderr, "Received %s message (%zd bytes) from %s:%u\n", log, recv_len, ip_str, ntohs(peer_address->sin_port));
-    msg_print(msg);
-    fprintf(stderr, "\n");
-}
-
-// NOTE Daj w inne miejsce
-void validate_received_length(const ssize_t recv_len) {
-    // NOTE Program nie powinien się wywalać przy jednym złym receive, ale początkowo tak zróbmy dla świętego spokoju i debugowania
-    
-    if (recv_len < 0) {
-        syserr("recvfrom failed");
-    }
-
-    if (recv_len < (ssize_t) sizeof(Message)) {
-        syserr("recvfrom less bytes than message size."); // TODO czy na pewno to zawsze błąd?
-    }
+    return recv_len;
 }
 
 // TODO ta funkcja jest aczytalna
 uint8_t receive_and_handle_hello_reply(struct sockaddr_in *peer_address, Peer **peers) {
     HelloReplyMessage msg;
-    socklen_t addr_len = (socklen_t) sizeof(*peer_address);
 
-    // Receive HELLO REPLY message.
-    ssize_t recv_len = recvfrom(g_socket_fd, g_buf, sizeof(g_buf), 0,
-                                (struct sockaddr *) peer_address, &addr_len);
-    validate_received_length(recv_len);
-    if (recv_len < (ssize_t) sizeof(HelloReplyMessage)) syserr("Za mało w hello reply");
+    ssize_t recv_len = receive_message(peer_address);
 
     // Deserialize Message structure.
     memcpy(&msg, g_buf, sizeof(HelloReplyMessage));
     msg_convert_to_host((Message *)&msg);
     if (msg.base.message != MSG_HELLO_REPLY) syserr("Received not reply? WTH?");
-    log_received_message("HELLO REPLY", peer_address, (Message *)&msg, recv_len);
+    log_received_message(peer_address, (Message *)&msg, recv_len);
 
     // Copy contents of peers
     if (msg.count > 0) {
@@ -618,11 +713,14 @@ uint8_t receive_and_handle_hello_reply(struct sockaddr_in *peer_address, Peer **
             peer_print(&(*peers)[i]);
             // FIXME Validate!
         }
+        fprintf(stderr, "\n");
     }
 
     // FIXME Jeśli jest niepoprawnie, to wynikiem powinno być 255 (czy to poprawne?)
     return msg.count;
 }
+
+// TODO Usystematyzować wysyłanie
 
 void send_hello(struct sockaddr_in *peer_address) {
     HelloMessage msg = {
@@ -748,9 +846,7 @@ void handle_hello(const struct sockaddr_in *peer_address) {
     ssize_t send_len = send_hello_reply(peer_address, &msg);
     if (send_len < 0) syserr("sendto HELLO REPLY");
     
-    fprintf(stderr, "Sent HELLO_REPLY message (%zd bytes)\n", send_len);
-    msg_print((Message *)&msg);
-
+    log_sent_message("HELLO_REPLY", peer_address, (Message *)&msg, send_len);
     establish_connection(peer_address); // Robimy to na koniec, żeby uniknąć tego w HELLO_REPLY
 }
 
@@ -798,39 +894,6 @@ void handle_time(const struct sockaddr_in *peer_address, const Message *msg) {
     // TODO: Implement this function
 }
 
-size_t msg_determine_size(const Message *msg) {
-    size_t msg_size;
-
-    switch (msg->message) {
-        case MSG_HELLO:
-        case MSG_CONNECT:
-        case MSG_ACK_CONNECT:
-        case MSG_DELAY_REQUEST:
-        case MSG_GET_TIME:
-            msg_size = sizeof(Message);
-            break;
-
-        case MSG_SYNC_START:
-        case MSG_DELAY_RESPONSE:
-        case MSG_TIME:
-            msg_size =  sizeof(SyncStartMessage);
-            break;
-
-        case MSG_HELLO_REPLY:
-            msg_size = sizeof(HelloReplyMessage);
-            break;
-
-        case MSG_LEADER:
-            msg_size = sizeof(LeaderMessage);
-            break;
-
-        default:
-            syserr("Unknown message type");
-    }
-
-    return msg_size;
-}
-
 void msg_load(Message **msg) {
     *msg = malloc(sizeof(Message));
     if (*msg == NULL) syserr("malloc msg_load");
@@ -851,81 +914,70 @@ void msg_load(Message **msg) {
     }
 }
 
+void handle_message(const struct sockaddr_in *peer_address, const ssize_t recv_len) {
+    // Interpret data as a Message structure.
+    Message *msg; // FIXME to brzydko wygląda
+    msg_load(&msg);
+        
+    log_received_message(peer_address, msg, recv_len);
+    
+    // Można napisać coś o tym, czemu nie rozważamy MSG_HELLO_REPLY.
+    switch (msg->message) {
+        case MSG_HELLO:
+            handle_hello(peer_address);
+            break;
+
+        case MSG_CONNECT:
+            handle_connect(peer_address);
+            break;
+
+        case MSG_ACK_CONNECT:
+            handle_ack_connect(peer_address);
+            break;
+
+        case MSG_SYNC_START:
+            handle_sync_start(peer_address, msg);
+            break;
+
+        case MSG_DELAY_REQUEST:
+            handle_delay_request(peer_address, msg);
+            break;
+
+        case MSG_DELAY_RESPONSE:
+            handle_delay_response(peer_address, msg);
+            break;
+
+        case MSG_LEADER:
+            handle_leader(peer_address, msg);
+            break;
+
+        case MSG_GET_TIME:
+            handle_get_time(msg);
+            break;
+
+        case MSG_TIME:
+            handle_time(peer_address, msg);
+            break;
+
+        default:
+            fprintf(stderr, "Unknown message type: %u\n", msg->message);
+            break;
+    }
+}
+
 void listen_for_messages() {
     struct sockaddr_in peer_address;
 
+    // TODO czy nie powinniśmy poświęcać większej uwagi addr_len po recvfrom?
     while (true) {
-        socklen_t addr_len = (socklen_t) sizeof(peer_address);
-
-        // Odbiór danych
-        ssize_t recv_len = recvfrom(g_socket_fd, g_buf, sizeof(g_buf), 0,
-                                    (struct sockaddr *) &peer_address, &addr_len);
-        validate_received_length(recv_len);
-
-        // Interpretacja odebranych danych jako struktura Message
-        Message *msg;
-        msg_load(&msg);
-
-        // Validate peer_address contents.
-        validate_address(&peer_address);
-
-        // Sprawdzenie typu komunikatu. Można napisać coś o tym, czemu nie rozważamy MSG_HELLO_REPLY.
-        // TODO to można uprościć, bezsensowny switch
-        switch (msg->message) {
-            case MSG_HELLO:
-                log_received_message("MSG_HELLO", &peer_address, msg, recv_len);
-                handle_hello(&peer_address); // NOTE nazwa nie zgadza się z konwencją
-                break;
-
-            case MSG_CONNECT:
-                log_received_message("MSG_CONNECT", &peer_address, msg, recv_len);
-                handle_connect(&peer_address);
-                break;
-
-            case MSG_ACK_CONNECT:
-                log_received_message("MSG_ACK_CONNECT", &peer_address, msg, recv_len);
-                handle_ack_connect(&peer_address);
-                break;
-
-            case MSG_SYNC_START:
-                log_received_message("MSG_SYNC_START", &peer_address, msg, recv_len);
-                handle_sync_start(&peer_address, msg);
-                break;
-
-            case MSG_DELAY_REQUEST:
-                log_received_message("MSG_DELAY_REQUEST", &peer_address, msg, recv_len);
-                handle_delay_request(&peer_address, msg);
-                break;
-
-            case MSG_DELAY_RESPONSE:
-                log_received_message("MSG_DELAY_RESPONSE", &peer_address, msg, recv_len);
-                handle_delay_response(&peer_address, msg);
-                break;
-
-            case MSG_LEADER:
-                log_received_message("MSG_LEADER", &peer_address, msg, recv_len);
-                handle_leader(&peer_address, msg);
-                break;
-
-            case MSG_GET_TIME:
-                log_received_message("MSG_GET_TIME", &peer_address, msg, recv_len);
-                handle_get_time(msg);
-                break;
-
-            case MSG_TIME:
-                log_received_message("MSG_TIME", &peer_address, msg, recv_len);
-                handle_time(&peer_address, msg);
-                break;
-
-            default: // Nieznany typ komunikatu
-                printf("Unknown message type: %d\n", msg->message);
-                break;
-        }
+        ssize_t recv_len = receive_message(&peer_address);
+        handle_message(&peer_address, recv_len);
     }
 }
 
 int main(int argc, char* argv[]) {
     init_global();
+    initialize_message_sizes();
     setup_signal_handler(); // Just for debugging I guess.
 
     ProgramArgs program_args = args_default();

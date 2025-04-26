@@ -1,4 +1,6 @@
 ---- OTWARTE ----
+// TODO Usystematyzować wysyłanie
+0. Co z tym addr_len?
 1.1.1. Co jeśli drugi raz dodajemy ten sam węzeł? (Sprawdzić treść oraz discorda) TO JEST NA DISCORDZIE, ZGLEBIC
 1.1.2.1 Co jeśli u starego węzła nie starcza miejsca na nowego? Problem jest też taki, że establish_connection u starego robimy na końcu handle_hello.
 1.2. Posprzątać!
@@ -20,6 +22,14 @@
 NA KONIEC
 1. Modularność - biblioteki.
 2. Klasy i structy i fajność, jedność.
+3. Można by zrobić bardziej ogólny struct Message.
+    I znowu byłby HelloMessage, HelloReplyMessage itd,
+    Ale w tej strukturze byłoby coś więcej:
+        - struktura do przesyłania danych przez internet (obecny Message)
+        - Funkcja do obsługi komunikatu
+        - Rozmiar komunikatu (ale to jest static)
+        - Nazwa komunikatu (to też static)
+        - Taka po prostu klasa
 
 NOTATKI
 1. Aktualnie "zaniedbujemy" g_buf: nie zerujemy go przed read-em, nie ustawiamy koncowych bajtow na 0.

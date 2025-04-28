@@ -11,11 +11,7 @@ TODO 1.1.1. Co jeśli drugi raz dodajemy ten sam węzeł? (Sprawdzić treść or
 
             Każdy węzeł Y przy odbieraniu (każdego komunikatu) hello-reply powinien sprawdzić, czy przesłany peer
             już u niego jest (to zapewne wymaga przechowywania Peerów w drzewie).
-1.1.1.2. Co jeśli B, który ponownie dołączył, otrzymuje jakiś komunikat sync-start bądź też nawet connect czy ack-connect od nieznanego węzła (bądź przed HELLO_REPLY)?
-    ODP Trzeba zignorować komunikaty sync-start, delay-request, delay-response.
-        Nie wolno ignorować komunikatów hello, hello-reply, connect, ack-connect, get-time, time, leader.
-        Widać zatem, że istnieje pewien podział komunikatów na weryfikowane i nieweryfikowane.
-1.1.1.3. Powyższy punkt (1.1.1.2) skłania do tego, by mieć static strukturę MessageInfo 
+0. Biblioteki już teraz
 1.1.2 Co jeśli u starego węzła nie starcza miejsca na nowego? Problem jest też taki, że establish_connection u starego robimy na końcu handle_hello.
 1.1.3. Kiedy węzły A B, które wysyłają sobie hello-reply, powinny dodać siebie do listy peerów?
 1.2. Posprzątać!
@@ -34,6 +30,9 @@ TODO 1.1.1. Co jeśli drugi raz dodajemy ten sam węzeł? (Sprawdzić treść or
 10. W sumie to te makra można zamienić na enum.
 11. Spoofing
 
+Komentowanie
+Wspomnieć, że niektóre ify są dla "extensibility".
+
 NA KONIEC
 1. Modularność - biblioteki.
 2. Klasy i structy i fajność, jedność.
@@ -49,17 +48,25 @@ NA KONIEC
 NOTATKI
 1. Aktualnie "zaniedbujemy" g_buf: nie zerujemy go przed read-em, nie ustawiamy koncowych bajtow na 0.
 
----- ROZWIĄZANE ----
-1. Rozdzielamy HELLO REPLY na dwa komunikaty?
+---- ODPOWIEDZI ----
+(1) Rozdzielamy HELLO REPLY na dwa komunikaty?
     ODP: Nie, nielegalne
-2. (Tutaj chodzi o ack_connect) Czy receive_reply jest poprawne: W sensie tam oczekujemy tylko i wyłącznie na HELLO_REPLY, to nienajlepsze? Co robić z innymi komunikatami, które mogą przyjść w międzyczasie? Czy mogą?
+(2) (Tutaj chodzi o ack_connect) Czy receive_reply jest poprawne: W sensie tam oczekujemy tylko i wyłącznie na HELLO_REPLY, to nienajlepsze? Co robić z innymi komunikatami, które mogą przyjść w międzyczasie? Czy mogą?
     ODP: Nie możemy oczekiwać wyłącznie na ACK_CONNECT, bo już połączone węzły moga wysyłać jakieś inne komunikaty
-3. Czy jeśli _ar_provided, to czy ten węzeł też jest znajomym nowego węzła?
+(3) Czy jeśli _ar_provided, to czy ten węzeł też jest znajomym nowego węzła?
     ODP: Mnie się wydaje, że tak, w końcu w treści napisane jest, że te węzły "nawiązały komunikację". Ale dla pewności można sprawdzić discorda.
-4. Jak sprawdzać dane podane na wejściu, szczególnie adresy. Z jednej strony przy pierwszej próbie nawiazania polaczenia funkcja sie wywali, z drugiej czy nie powinnismy o tym wiedziec zawczasu?
+(4) Jak sprawdzać dane podane na wejściu, szczególnie adresy. Z jednej strony przy pierwszej próbie nawiazania polaczenia funkcja sie wywali, z drugiej czy nie powinnismy o tym wiedziec zawczasu?
     ODP: Peczarski pisze, że poprawność sprawdzi funkcja wysyłająca
+1.1.1.2. Co jeśli B, który ponownie dołączył, otrzymuje jakiś komunikat sync-start bądź też nawet connect czy ack-connect od nieznanego węzła (bądź przed HELLO_REPLY)?
+    ODP Trzeba zignorować komunikaty sync-start, delay-request, delay-response.
+        Nie wolno ignorować komunikatów hello, hello-reply, connect, ack-connect, get-time, time, leader.
+        Widać zatem, że istnieje pewien podział komunikatów na weryfikowane i nieweryfikowane.
+
+
+---- ROZWIĄZANE ----
 0.1. Jak w końcu to HELLO_REPLY, jak z innymi? Czy zrobić jakąś klasę i podklasy, tak jak we Futureach? TAK
         - nie miec PeerMessage, to bedzei po prostu w Peer DONE
 1.1.2 Połączyć te pierwsze węzły DONE
+1.1.1.3. Powyższy punkt (1.1.1.2) skłania do tego, by mieć static strukturę MessageInfo DONE 
 
 

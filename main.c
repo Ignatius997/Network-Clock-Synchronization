@@ -434,10 +434,6 @@ void init_msg_info(void) {
     _set_msg_info_allow_unknown_sender();
 }
 
-size_t msg_determine_size(const Message *msg) {
-    return g_msg_info[msg->message].size;
-}
-
 // TODO można skrócić
 void msg_print(const Message *msg) {
     fprintf(stderr, "Message %p:\n", (void*) msg);
@@ -555,6 +551,10 @@ void msg_convert_to_host(Message *msg) {
     }
 }
 
+size_t msg_size(const Message *msg) {
+    return g_msg_info[msg->message].size;
+}
+
 // TODO te całe wysyłanie możnaby jakoś ujednolicić.
 // TODO dodać to cale oczekiwanie od 5 do 10 sekund
 
@@ -621,25 +621,27 @@ void log_sent_message(const struct sockaddr_in *peer_address, const Message *msg
     fprintf(stderr, "\n");
 }
 
-void log_sending_peers(const size_t msg_size) {
-    size_t offset = msg_size;
-    fprintf(stderr, "Sending peers:\n");
-    for (size_t i = 0; i < g_count; ++i) {
-        Peer *p = (Peer *) (g_buf + offset);
-        peer_print(p);
-        offset += sizeof(Peer);
+void log_sending_peers(const Message *msg) {
+    if (msg->message == MSG_HELLO_REPLY) {
+        size_t offset = msg_size(msg);
+        fprintf(stderr, "Sending peers:\n");
+        for (size_t i = 0; i < msg->count; ++i) {
+            Peer *p = (Peer *) (g_buf + offset);
+            peer_print(p);
+            offset += sizeof(Peer);
+        }
     }
 }
 
 // NOTE Daj w inne miejsce
-int validate_received_length(const ssize_t recv_len, const uint8_t message_type) {
+int validate_received_length(const ssize_t recv_len, const Message *msg) {
     // NOTE Program nie powinien się wywalać przy jednym złym receive, ale początkowo tak zróbmy dla świętego spokoju i debugowania
     
     if (recv_len < 0) {
         syserr("recvfrom failed");
     }
 
-    if (recv_len < (ssize_t) g_msg_info[message_type].size) {
+    if (recv_len < (ssize_t) msg_size(msg)) {
         syserr("recvfrom less bytes than message size."); // Można dodać rodzaj msg
         return 1;
     }
@@ -663,26 +665,30 @@ void validate_address(const struct sockaddr_in *addr) {
     // }
 }
 
-void validate_peers(const HelloReplyMessage *msg) {
-    if (msg->count > 0) {
-        Peer *peers = malloc(msg->count * sizeof(Peer));
-        if (peers == NULL) syserr("malloc failed");
-        memcpy(peers, g_buf + sizeof(msg), msg->count * sizeof(Peer));
+int validate_peers(const Message *msg) {
+    if (msg->message == MSG_HELLO_REPLY) { // For extensibility.
+        HelloReplyMessage *hrmsg = (HelloReplyMessage *)msg;
 
-        fprintf(stderr, "Peers from HELLO_REPLY:\n");
-        for (size_t i = 0; i < msg->count; ++i) {
-            // peer_convert_to_host(&(*peers)[i]);
-            peer_print(&(peers)[i]);
-            // FIXME Validate!
+        if (hrmsg->count > 0) {
+            size_t offset = msg_size(msg);
+            
+            fprintf(stderr, "Validating peers:\n");
+            for (size_t i = 0; i < hrmsg->count; ++i) {
+                Peer *p = (Peer *) (g_buf + offset);
+                peer_print(p); // FIXME actually validate
+                offset += sizeof(Peer);
+            }
         }
         fprintf(stderr, "\n");
     }
+    
+    return 0; // NOTE Success
 }
 
 int validate_received_data(const struct sockaddr_in *peer_address, const ssize_t recv_len, const Message *msg) {
-    int ret = validate_received_length(recv_len, msg->message);
+    int ret = validate_received_length(recv_len, msg);
     validate_address(peer_address);
-    if (msg->message == MSG_HELLO_REPLY) validate_peers((HelloReplyMessage *)msg);
+    if (msg->message == MSG_HELLO_REPLY) validate_peers(msg);
     return ret; // NOTE Potem, gdy nie będziemy rzucali syserr w przypadku recv_len < msg_size, będziemy mogli jakoś to lepiej obsłużyc
 }
 
@@ -705,28 +711,42 @@ void establish_connection(const struct sockaddr_in *peer_address) {
 /** `msg_dest` should not be initialized. */
 Message* msg_copy(const Message *msg_src) {
     // NOTE możemy opakować tego malloca
-    Message *msg_cp = malloc(g_msg_info[msg_src->message].size);
+    Message *msg_cp = malloc(msg_size(msg_src));
     if (msg_cp == NULL) {
         syserr("malloc failed in msg_copy");
     }
 
-    memcpy(msg_cp, msg_src, g_msg_info[msg_src->message].size);
+    memcpy(msg_cp, msg_src, msg_size(msg_src));
     return msg_cp;
 }
 
 // NOTE za długa nazwa
 // NOTE można by to uogólnić, jednak w sumie jakiekolwiek uogólnienie to po prostu memcpy :)
-size_t prepare_buffer_for_sending_hello_reply(const Message *msg) {
-    size_t msg_len = g_msg_info[msg->message].size;
-    size_t peers_len = g_count * sizeof(Peer);
-    size_t total_len = msg_len + peers_len;
+// peer_index to indeks typa, ktorego nie przesyłamy
+void prepare_buffer_for_sending(const Message *msg, ssize_t peer_index) {
+    memcpy(g_buf, msg, msg_size(msg)); // Load message to buffer.
+    
+    if (msg->message == MSG_HELLO_REPLY) {
+        HelloReplyMessage *hrmsg = (HelloReplyMessage *)msg;
+        size_t full_len = hrmsg->count * sizeof(Peer);
+        void *src1  = g_buf;
+        void *dest1 = g_buf + msg_size(msg);
 
-    // Load message and peers to buffer
-    memcpy(g_buf, msg, msg_len);
-    memcpy(g_buf + msg_len, g_peers, peers_len);
+        // Load peers to buffer
+        if (hrmsg->count == g_count) {
+            memcpy(dest1, src1, full_len)
+        } else {
+            size_t len1 = peer_index * sizeof(Peer);
+            size_t len2 = full_len - len1;
+            void *src2  = src1 + len1 + sizeof(Peer);
+            void *dest2 = dest1 + len1;
 
-    log_sending_peers(msg_len);
-    return total_len;
+            memcpy(dest1, src1, len1);
+            memcpy(dest2, src2, len2)
+        }
+            
+        log_sending_peers(msg);
+    }
 }
 
 /**
@@ -738,7 +758,7 @@ ssize_t send_wrap(const struct sockaddr_in *peer_address, const Message *msg, ss
     ssize_t send_len;
 
     if (len < 0) {
-        send_len = sendto(g_socket_fd, msg, g_msg_info[msg->message].size, 0,
+        send_len = sendto(g_socket_fd, msg, msg_size(msg), 0,
             (struct sockaddr *) peer_address, addr_len);
     } else {
         send_len = sendto(g_socket_fd, g_buf, len, 0,
@@ -774,12 +794,19 @@ ssize_t send_hello(const struct sockaddr_in *peer_address) {
 }
 
 ssize_t send_hello_reply(const struct sockaddr_in *peer_address) {
+    ssize_t pind = -1;
+    Peer *p = find_peer(peer_address);
+    if (p != NULL) { // Już znamy ten węzeł
+        pind = (uintptr_t) p - (uintptr_t) g_peers;
+    }
+    
     HelloReplyMessage msg = {
         .base.message = MSG_HELLO_REPLY,
-        .count        = g_count,
+        .count        = pind == -1 ? g_count : g_count - 1,
     };
 
-    size_t len = prepare_buffer_for_sending_hello_reply((Message *)&msg);
+    size_t len = prepare_buffer_for_sending_hello_reply((Message *)&msg, pind);
+    size_t len = msg_size((Message *)&msg) + msg.count * sizeof(Peer);
     return send_message(peer_address, (Message *)&msg, len);
 }
 
@@ -818,7 +845,7 @@ ssize_t receive_message(struct sockaddr_in *peer_address) {
     socklen_t addr_len = (socklen_t) sizeof(*peer_address);
     ssize_t recv_len = recvfrom(g_socket_fd, g_buf, sizeof(g_buf), 0,
                                 (struct sockaddr *) peer_address, &addr_len);
-    int val = validate_received_data(peer_address, recv_len, g_buf[0]);
+    int val = validate_received_data(peer_address, recv_len, (Message *)g_buf);
     (void)val; // NOTE nieużyta zmienna
 
     return recv_len;
@@ -909,26 +936,48 @@ Message *msg_load() {
     if (msg == NULL) syserr("malloc msg_load");
     
     memcpy(msg, g_buf, sizeof(Message));
-    size_t msg_size = msg_determine_size(msg);
+    size_t message_size = msg_size(msg);
 
-    if (msg_size > sizeof(Message)) {
-        Message *tmp_msg = realloc(msg, msg_size);
+    if (message_size > sizeof(Message)) {
+        Message *tmp_msg = realloc(msg, message_size);
         if (tmp_msg == NULL) {
             free(msg);
             syserr("realloc msg_load");
         }
 
         msg = tmp_msg;
-        memcpy((uint8_t *)msg + sizeof(Message), g_buf + sizeof(Message), msg_size - sizeof(Message));
+        memcpy((uint8_t *)msg + sizeof(Message), g_buf + sizeof(Message), message_size - sizeof(Message));
     }
 
     return msg;
+}
+
+/** O(g_count) */
+Peer* find_peer(const struct sockaddr_in *peer_address) {
+    uint16_t port = peer_address->sin_port;
+    uint32_t addr = peer_address->sin_addr.s_addr;
+
+    Peer *p = NULL;
+    for (size_t i = 0; i < g_count; ++i) {
+        if (g_peers[i].peer_port == port &&
+            memcmp(g_peers[i].peer_address, &addr, IPV4_ADDR_LEN) == 0) {
+            p = &g_peers[i];
+            break;
+        }
+    }
+
+    return p;
 }
 
 void handle_message(const struct sockaddr_in *peer_address, const ssize_t recv_len) {
     Message *msg = msg_load(); // Interpret data as a Message structure.
     log_received_message(peer_address, msg, recv_len);
     
+    if (!g_msg_info[msg->message].allow_unknown_sender &&
+        find_peer(peer_address) == NULL) {
+        syserr("Nie znom jo tego chłopa."); // NOTE nie powinno się wywalać, lecz chyba coś powinno wypisywać
+    }
+
     // Można napisać coś o tym, czemu nie rozważamy MSG_HELLO_REPLY.
     // FIXME Jednak trzeba tu uwzględnić MSG_HELLO_REPLY, bo co jeśli węzeł ponownie dołącza do sieci i jakiś koleżka wyśle mu np SYNC_START?
     switch (msg->message) {
@@ -1008,9 +1057,6 @@ void join_network(ProgramArgs args) {
 }
 
 int main(int argc, char* argv[]) {
-    printf("MessageInfo size: %zd\n", sizeof(MessageInfo));
-    exit(0);
-    
     init_global();
     setup_signal_handler(); // Just for debugging I guess.
     init_msg_info();

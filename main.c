@@ -33,6 +33,7 @@
 #define MSG_TIME            32
 
 #define IPV4_ADDR_LEN 4
+#define MSG_MAX       255
 
 #define BUF_SIZE 65535 // FIXME myślę, że więcej
 
@@ -142,7 +143,7 @@ void peer_add(const Peer *p) {
     memcpy(&g_peers[g_count++], p, sizeof(Peer));
 }
 
-void init_global() {
+void init_global(void) {
     g_count = 0;
     g_peers_capacity = 1;
     g_peers = (Peer*) malloc(g_peers_capacity * sizeof(Peer));
@@ -391,54 +392,50 @@ typedef struct __attribute__((__packed__)) {
     uint64_t timestamp;
 } TimeMessage;
 
-// NOTE Tymczasowe, to się potem ulepszy.
-static size_t g_msg_size[100] = {0};
-void initialize_message_sizes(void) {
-    g_msg_size[MSG_HELLO] = sizeof(HelloMessage);
-    g_msg_size[MSG_HELLO_REPLY] = sizeof(HelloReplyMessage);
-    g_msg_size[MSG_CONNECT] = sizeof(ConnectMessage);
-    g_msg_size[MSG_ACK_CONNECT] = sizeof(AckConnectMessage);
-    g_msg_size[MSG_SYNC_START] = sizeof(SyncStartMessage);
-    g_msg_size[MSG_DELAY_REQUEST] = sizeof(DelayRequestMessage);
-    g_msg_size[MSG_DELAY_RESPONSE] = sizeof(DelayResponseMessage);
-    g_msg_size[MSG_LEADER] = sizeof(LeaderMessage);
-    g_msg_size[MSG_GET_TIME] = sizeof(GetTimeMessage);
-    g_msg_size[MSG_TIME] = sizeof(TimeMessage);
+// NOTE Powinno być gdzie indziej
+// NOTE Pakujemy, żeby ponad dwukrotnie zmniejszyć rozmiar struktury
+typedef struct __attribute__((__packed__)) {
+    uint8_t message;
+    size_t  size;
+    bool    allow_unknown_sender;
+} MessageInfo;
+
+static MessageInfo g_msg_info[MSG_MAX+1];
+
+void _set_msg_info_size(void) {
+    g_msg_info[MSG_HELLO].size          = sizeof(HelloMessage);
+    g_msg_info[MSG_HELLO_REPLY].size    = sizeof(HelloReplyMessage);
+    g_msg_info[MSG_CONNECT].size        = sizeof(ConnectMessage);
+    g_msg_info[MSG_ACK_CONNECT].size    = sizeof(AckConnectMessage);
+    g_msg_info[MSG_SYNC_START].size     = sizeof(SyncStartMessage);
+    g_msg_info[MSG_DELAY_REQUEST].size  = sizeof(DelayRequestMessage);
+    g_msg_info[MSG_DELAY_RESPONSE].size = sizeof(DelayResponseMessage);
+    g_msg_info[MSG_LEADER].size         = sizeof(LeaderMessage);
+    g_msg_info[MSG_GET_TIME].size       = sizeof(GetTimeMessage);
+    g_msg_info[MSG_TIME].size           = sizeof(TimeMessage);
+}
+
+void _set_msg_info_allow_unknown_sender(void) {
+    g_msg_info[MSG_HELLO].allow_unknown_sender          = true;
+    g_msg_info[MSG_HELLO_REPLY].allow_unknown_sender    = true;
+    g_msg_info[MSG_CONNECT].allow_unknown_sender        = true;
+    g_msg_info[MSG_ACK_CONNECT].allow_unknown_sender    = true;
+    g_msg_info[MSG_SYNC_START].allow_unknown_sender     = false;
+    g_msg_info[MSG_DELAY_REQUEST].allow_unknown_sender  = false;
+    g_msg_info[MSG_DELAY_RESPONSE].allow_unknown_sender = false;
+    g_msg_info[MSG_LEADER].allow_unknown_sender         = true;
+    g_msg_info[MSG_GET_TIME].allow_unknown_sender       = true;
+    g_msg_info[MSG_TIME].allow_unknown_sender           = true;
+}
+
+void init_msg_info(void) {
+    memset(g_msg_info, 0, sizeof(g_msg_info));
+    _set_msg_info_size();
+    _set_msg_info_allow_unknown_sender();
 }
 
 size_t msg_determine_size(const Message *msg) {
-    return g_msg_size[msg->message];
-
-    // size_t msg_size;
-
-    // switch (msg->message) {
-    //     case MSG_HELLO:
-    //     case MSG_CONNECT:
-    //     case MSG_ACK_CONNECT:
-    //     case MSG_DELAY_REQUEST:
-    //     case MSG_GET_TIME:
-    //         msg_size = sizeof(Message);
-    //         break;
-
-    //     case MSG_SYNC_START:
-    //     case MSG_DELAY_RESPONSE:
-    //     case MSG_TIME:
-    //         msg_size =  sizeof(SyncStartMessage);
-    //         break;
-
-    //     case MSG_HELLO_REPLY:
-    //         msg_size = sizeof(HelloReplyMessage);
-    //         break;
-
-    //     case MSG_LEADER:
-    //         msg_size = sizeof(LeaderMessage);
-    //         break;
-
-    //     default:
-    //         syserr("Unknown message type");
-    // }
-
-    // return msg_size;
+    return g_msg_info[msg->message].size;
 }
 
 // TODO można skrócić
@@ -642,7 +639,7 @@ int validate_received_length(const ssize_t recv_len, const uint8_t message_type)
         syserr("recvfrom failed");
     }
 
-    if (recv_len < (ssize_t) g_msg_size[message_type]) {
+    if (recv_len < (ssize_t) g_msg_info[message_type].size) {
         syserr("recvfrom less bytes than message size."); // Można dodać rodzaj msg
         return 1;
     }
@@ -666,16 +663,16 @@ void validate_address(const struct sockaddr_in *addr) {
     // }
 }
 
-void validate_peers() {
-    if (msg.count > 0) {
-        *peers = malloc(msg.count * sizeof(Peer));
-        if (*peers == NULL) syserr("malloc failed");
-        memcpy(*peers, g_buf + sizeof(msg), msg.count * sizeof(Peer));
+void validate_peers(const HelloReplyMessage *msg) {
+    if (msg->count > 0) {
+        Peer *peers = malloc(msg->count * sizeof(Peer));
+        if (peers == NULL) syserr("malloc failed");
+        memcpy(peers, g_buf + sizeof(msg), msg->count * sizeof(Peer));
 
         fprintf(stderr, "Peers from HELLO_REPLY:\n");
-        for (size_t i = 0; i < msg.count; ++i) {
+        for (size_t i = 0; i < msg->count; ++i) {
             // peer_convert_to_host(&(*peers)[i]);
-            peer_print(&(*peers)[i]);
+            peer_print(&(peers)[i]);
             // FIXME Validate!
         }
         fprintf(stderr, "\n");
@@ -685,7 +682,7 @@ void validate_peers() {
 int validate_received_data(const struct sockaddr_in *peer_address, const ssize_t recv_len, const Message *msg) {
     int ret = validate_received_length(recv_len, msg->message);
     validate_address(peer_address);
-    if (message_type == MSG_HELLO_REPLY) validate_peers();
+    if (msg->message == MSG_HELLO_REPLY) validate_peers((HelloReplyMessage *)msg);
     return ret; // NOTE Potem, gdy nie będziemy rzucali syserr w przypadku recv_len < msg_size, będziemy mogli jakoś to lepiej obsłużyc
 }
 
@@ -708,19 +705,19 @@ void establish_connection(const struct sockaddr_in *peer_address) {
 /** `msg_dest` should not be initialized. */
 Message* msg_copy(const Message *msg_src) {
     // NOTE możemy opakować tego malloca
-    Message *msg_cp = malloc(g_msg_size[msg_src->message]);
+    Message *msg_cp = malloc(g_msg_info[msg_src->message].size);
     if (msg_cp == NULL) {
         syserr("malloc failed in msg_copy");
     }
 
-    memcpy(msg_cp, msg_src, g_msg_size[msg_src->message]);
+    memcpy(msg_cp, msg_src, g_msg_info[msg_src->message].size);
     return msg_cp;
 }
 
 // NOTE za długa nazwa
 // NOTE można by to uogólnić, jednak w sumie jakiekolwiek uogólnienie to po prostu memcpy :)
 size_t prepare_buffer_for_sending_hello_reply(const Message *msg) {
-    size_t msg_len = g_msg_size[msg->message];
+    size_t msg_len = g_msg_info[msg->message].size;
     size_t peers_len = g_count * sizeof(Peer);
     size_t total_len = msg_len + peers_len;
 
@@ -741,7 +738,7 @@ ssize_t send_wrap(const struct sockaddr_in *peer_address, const Message *msg, ss
     ssize_t send_len;
 
     if (len < 0) {
-        send_len = sendto(g_socket_fd, msg, g_msg_size[msg->message], 0,
+        send_len = sendto(g_socket_fd, msg, g_msg_info[msg->message].size, 0,
             (struct sockaddr *) peer_address, addr_len);
     } else {
         send_len = sendto(g_socket_fd, g_buf, len, 0,
@@ -919,7 +916,6 @@ Message *msg_load() {
         if (tmp_msg == NULL) {
             free(msg);
             syserr("realloc msg_load");
-            return;
         }
 
         msg = tmp_msg;
@@ -1012,9 +1008,12 @@ void join_network(ProgramArgs args) {
 }
 
 int main(int argc, char* argv[]) {
+    printf("MessageInfo size: %zd\n", sizeof(MessageInfo));
+    exit(0);
+    
     init_global();
-    initialize_message_sizes();
     setup_signal_handler(); // Just for debugging I guess.
+    init_msg_info();
 
     ProgramArgs program_args = args_default();
     args_parse(argc, argv, &program_args);

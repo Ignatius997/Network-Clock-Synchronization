@@ -13,7 +13,7 @@
 #include "../include/common.h"
 #include "../include/err.h"
 
-void close_socket(const int sockfd) {
+void cmn_close_socket(const int sockfd) {
     if (sockfd >= 0) {
         close(sockfd);
         fprintf(stderr, "Socket closed.\n");
@@ -46,7 +46,7 @@ void cmn_set_address(char const *peer_ip_str, const uint16_t port, struct sockad
 }
 
 /** Kod i komentarz zajumany z echo-server.c z labów udp. */
-void init_addr(struct sockaddr_in *bind_address, const char *addr, const uint16_t port) {
+static void _init_addr(struct sockaddr_in *bind_address, const char *addr, const uint16_t port) {
     // Bind the socket to a concrete address
     bind_address->sin_family = AF_INET; // IPv4
     bind_address->sin_addr.s_addr = cmn_extract_ip4(addr);
@@ -54,16 +54,16 @@ void init_addr(struct sockaddr_in *bind_address, const char *addr, const uint16_
 }
 
 // TODO obsłużyć przypadek bez podanego portu (chyba obsluzony, bo port wtedy jest rowny 0)
-void init_socket(int *sockfd, struct sockaddr_in *bind_address, const char *addr, const uint16_t port) {
+void cmn_init_socket(int *sockfd, struct sockaddr_in *bind_address, const char *addr, const uint16_t port) {
     *sockfd = socket(AF_INET, SOCK_DGRAM, 0);
     if (*sockfd < 0) {
         syserr("Socket creation failed");
     }
 
-    init_addr(bind_address, addr, port);
+    _init_addr(bind_address, addr, port);
 
     if (bind(*sockfd, (struct sockaddr *) bind_address, (socklen_t) sizeof(*bind_address)) < 0) {
-        close_socket(*sockfd);
+        cmn_close_socket(*sockfd);
         syserr("bind");
     }
 
@@ -73,7 +73,7 @@ void init_socket(int *sockfd, struct sockaddr_in *bind_address, const char *addr
 /**
  * "Ukradzione" z kodu z laboratoriów.
  */
-uint16_t read_port(char const *string) {
+uint16_t cmn_read_port(char const *string) {
     char *endptr;
     errno = 0; // TODO Czy mamy używać errno w całym projekcie?
     unsigned long port = strtoul(string, &endptr, 10);

@@ -12,7 +12,7 @@
 
 static void sig_handle_sigint(int sig) {
     fprintf(stderr, "\nCaught signal %d (SIGINT). Closing socket and exiting...\n", sig);
-    // close_socket(g_socket_fd); NOTE Jebać ten fd, niech sam sobie poradzi
+    // cmn_close_socket(g_socket_fd); NOTE Jebać ten fd, niech sam sobie poradzi
     exit(130);
 }
 
@@ -22,7 +22,7 @@ static void sig_handle_quit(int sig) {
         peer_print(&peer_get_all()[i]);
     }
     fprintf(stderr, "\n");
-    // close_socket(g_socket_fd); NOTE znowu przeklęty fd
+    // cmn_close_socket(g_socket_fd); NOTE znowu przeklęty fd
     exit(1);
 }
 

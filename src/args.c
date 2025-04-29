@@ -42,7 +42,7 @@ void args_load_value(char *arg, const char opt, ProgramArgs *program_args) {
             break;
 
         case ARGOPT_PORT:
-            program_args->port = read_port(arg);
+            program_args->port = cmn_read_port(arg);
             break;
 
         case ARGOPT_PEER_ADDRESS:
@@ -50,7 +50,7 @@ void args_load_value(char *arg, const char opt, ProgramArgs *program_args) {
             break;
 
         case ARGOPT_PEER_PORT:
-            program_args->peer_port = read_port(arg);
+            program_args->peer_port = cmn_read_port(arg);
             break;
 
         default:

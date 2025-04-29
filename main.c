@@ -81,10 +81,10 @@ void peer_convert_to_host(Peer *p) {
  * Naming convention: g_{name}.
  */
 // NOTE tutaj trzymamy wszystko w host, czyli, w little endianness.
-static int      g_socket_fd;
-static Peer*    g_peers; // Known peer nodes.
-static uint16_t g_count; // Number of known peer nodes
-static uint16_t g_peers_capacity; // `g_peers` capacity
+static int      g_socket_fd; // ofc host order
+static Peer*    g_peers; // Known peer nodes (fields in g_peers are in big endianess).
+static uint16_t g_count; // Number of known peer nodes in host order
+static uint16_t g_peers_capacity; // `g_peers` capacity in host order
 static uint8_t  g_buf[BUF_SIZE] = {0}; // Buffer for read operations.
 
 /** Auxiliary */
@@ -142,6 +142,24 @@ void peer_add(const Peer *p) {
 
     memcpy(&g_peers[g_count++], p, sizeof(Peer));
 }
+
+/** O(g_count) */
+Peer* peer_find(const struct sockaddr_in *peer_address) {
+    uint16_t port = peer_address->sin_port;
+    uint32_t addr = peer_address->sin_addr.s_addr;
+
+    Peer *p = NULL;
+    for (size_t i = 0; i < g_count; ++i) {
+        if (g_peers[i].peer_port == port &&
+            memcmp(g_peers[i].peer_address, &addr, IPV4_ADDR_LEN) == 0) {
+            p = &g_peers[i];
+            break;
+        }
+    }
+
+    return p;
+}
+
 
 void init_global(void) {
     g_count = 0;
@@ -400,6 +418,12 @@ typedef struct __attribute__((__packed__)) {
     bool    allow_unknown_sender;
 } MessageInfo;
 
+/** Information about send operation. Packed to save memory. */
+typedef struct __attribute__((__packed__)) {
+    ssize_t send_len;
+    bool    known; // Used in sending hello-reply message // NOTE zmienić nazwę
+} SendInfo;
+
 static MessageInfo g_msg_info[MSG_MAX+1];
 
 void _set_msg_info_size(void) {
@@ -625,7 +649,7 @@ void log_sending_peers(const Message *msg) {
     if (msg->message == MSG_HELLO_REPLY) {
         size_t offset = msg_size(msg);
         fprintf(stderr, "Sending peers:\n");
-        for (size_t i = 0; i < msg->count; ++i) {
+        for (size_t i = 0; i < ntohs(((HelloReplyMessage *)msg)->count); ++i) {
             Peer *p = (Peer *) (g_buf + offset);
             peer_print(p);
             offset += sizeof(Peer);
@@ -667,15 +691,15 @@ void validate_address(const struct sockaddr_in *addr) {
 
 int validate_peers(const Message *msg) {
     if (msg->message == MSG_HELLO_REPLY) { // For extensibility.
-        HelloReplyMessage *hrmsg = (HelloReplyMessage *)msg;
-
-        if (hrmsg->count > 0) {
+        uint16_t peers_count = ntohs(((HelloReplyMessage *)msg)->count);
+        
+        if (peers_count > 0) {
             size_t offset = msg_size(msg);
             
             fprintf(stderr, "Validating peers:\n");
-            for (size_t i = 0; i < hrmsg->count; ++i) {
+            for (size_t i = 0; i < peers_count; ++i) {
                 Peer *p = (Peer *) (g_buf + offset);
-                peer_print(p); // FIXME actually validate
+                // peer_print(p); // FIXME actually validate
                 offset += sizeof(Peer);
             }
         }
@@ -723,26 +747,26 @@ Message* msg_copy(const Message *msg_src) {
 // NOTE za długa nazwa
 // NOTE można by to uogólnić, jednak w sumie jakiekolwiek uogólnienie to po prostu memcpy :)
 // peer_index to indeks typa, ktorego nie przesyłamy
-void prepare_buffer_for_sending(const Message *msg, ssize_t peer_index) {
+void prepare_buffer_for_sending(const Message *msg, const ssize_t peer_index) {
     memcpy(g_buf, msg, msg_size(msg)); // Load message to buffer.
     
     if (msg->message == MSG_HELLO_REPLY) {
-        HelloReplyMessage *hrmsg = (HelloReplyMessage *)msg;
-        size_t full_len = hrmsg->count * sizeof(Peer);
-        void *src1  = g_buf;
+        size_t full_len = ntohs(((HelloReplyMessage *)msg)->count) * sizeof(Peer);
+        void *src1  = g_peers;
         void *dest1 = g_buf + msg_size(msg);
 
         // Load peers to buffer
-        if (hrmsg->count == g_count) {
-            memcpy(dest1, src1, full_len)
+        if (peer_index == -1) {
+            memcpy(dest1, src1, full_len);
         } else {
+            // NOTE Czy sprawdzać, czy nie wychodzimy poza bufor?
             size_t len1 = peer_index * sizeof(Peer);
             size_t len2 = full_len - len1;
             void *src2  = src1 + len1 + sizeof(Peer);
             void *dest2 = dest1 + len1;
 
             memcpy(dest1, src1, len1);
-            memcpy(dest2, src2, len2)
+            memcpy(dest2, src2, len2);
         }
             
         log_sending_peers(msg);
@@ -753,7 +777,7 @@ void prepare_buffer_for_sending(const Message *msg, ssize_t peer_index) {
  * Jeśli nie bierzemy z g_buf: len=-1
  * Jeśli bierzemy z g_buf, to msg nie ma znaczenia
  */
-ssize_t send_wrap(const struct sockaddr_in *peer_address, const Message *msg, ssize_t len) {
+ssize_t sendto_wrap(const struct sockaddr_in *peer_address, const Message *msg, ssize_t len) {
     socklen_t addr_len = (socklen_t) sizeof(*peer_address);
     ssize_t send_len;
 
@@ -779,7 +803,7 @@ ssize_t send_message(const struct sockaddr_in *peer_address, const Message *msg,
         
     }
 
-    ssize_t send_len = send_wrap(peer_address, msg, len);
+    ssize_t send_len = sendto_wrap(peer_address, msg, len);
     if (send_len > 0 ) log_sent_message(peer_address, msg, send_len);
 
     return send_len;
@@ -793,21 +817,19 @@ ssize_t send_hello(const struct sockaddr_in *peer_address) {
     return send_message(peer_address, (Message *)&msg, -1);
 }
 
-ssize_t send_hello_reply(const struct sockaddr_in *peer_address) {
-    ssize_t pind = -1;
-    Peer *p = find_peer(peer_address);
-    if (p != NULL) { // Już znamy ten węzeł
-        pind = (uintptr_t) p - (uintptr_t) g_peers;
-    }
-    
+void send_hello_reply(const struct sockaddr_in *peer_address, SendInfo *sinfo) {
+    Peer *p = peer_find(peer_address);
+    sinfo->known = p != NULL;
+    ssize_t pind = sinfo->known ? (uintptr_t) p - (uintptr_t) g_peers : -1;
+
     HelloReplyMessage msg = {
         .base.message = MSG_HELLO_REPLY,
-        .count        = pind == -1 ? g_count : g_count - 1,
+        .count        = sinfo->known ? htons(g_count-1) : htons(g_count),
     };
 
-    size_t len = prepare_buffer_for_sending_hello_reply((Message *)&msg, pind);
-    size_t len = msg_size((Message *)&msg) + msg.count * sizeof(Peer);
-    return send_message(peer_address, (Message *)&msg, len);
+    size_t full_len = msg_size((Message *)&msg) + ntohs(msg.count) * sizeof(Peer);
+    prepare_buffer_for_sending((Message *)&msg, pind);
+    sinfo->send_len = send_message(peer_address, (Message *)&msg, full_len);
 }
 
 ssize_t send_connect(struct sockaddr_in *peer_address) {
@@ -862,13 +884,14 @@ uint8_t receive_and_handle_hello_reply(struct sockaddr_in *peer_address, Peer **
     log_received_message(peer_address, (Message *)&msg, recv_len);
 
     // Copy contents of peers
-    if (msg.count > 0) {
-        *peers = malloc(msg.count * sizeof(Peer));
+    uint16_t peers_count = ntohs(msg.count);
+    if (peers_count > 0) {
+        *peers = malloc(peers_count * sizeof(Peer));
         if (*peers == NULL) syserr("malloc failed");
-        memcpy(*peers, g_buf + sizeof(msg), msg.count * sizeof(Peer));
+        memcpy(*peers, g_buf + sizeof(msg), peers_count * sizeof(Peer));
 
         fprintf(stderr, "Peers from HELLO_REPLY:\n");
-        for (size_t i = 0; i < msg.count; ++i) {
+        for (size_t i = 0; i < peers_count; ++i) {
             // peer_convert_to_host(&(*peers)[i]);
             peer_print(&(*peers)[i]);
             // FIXME Validate!
@@ -877,14 +900,18 @@ uint8_t receive_and_handle_hello_reply(struct sockaddr_in *peer_address, Peer **
     }
 
     // FIXME Jeśli jest niepoprawnie, to wynikiem powinno być 255 (czy to poprawne?)
-    return msg.count;
+    return peers_count;
 }
 
 // TODO czy mozna sensownie ujednolicic wysylanie, aby to tez mozna bylo dac do funkcji `msg_send`?
 // TODO Posprzątać
 void handle_hello(const struct sockaddr_in *peer_address) {
-    send_hello_reply(peer_address);
-    establish_connection(peer_address); // Robimy to na koniec, żeby uniknąć tego w HELLO_REPLY
+    SendInfo info;
+    send_hello_reply(peer_address, &info);
+
+    if (info.known) {
+        establish_connection(peer_address);
+    }
 }
 
 void handle_connect(const struct sockaddr_in *peer_address) {
@@ -952,29 +979,12 @@ Message *msg_load() {
     return msg;
 }
 
-/** O(g_count) */
-Peer* find_peer(const struct sockaddr_in *peer_address) {
-    uint16_t port = peer_address->sin_port;
-    uint32_t addr = peer_address->sin_addr.s_addr;
-
-    Peer *p = NULL;
-    for (size_t i = 0; i < g_count; ++i) {
-        if (g_peers[i].peer_port == port &&
-            memcmp(g_peers[i].peer_address, &addr, IPV4_ADDR_LEN) == 0) {
-            p = &g_peers[i];
-            break;
-        }
-    }
-
-    return p;
-}
-
 void handle_message(const struct sockaddr_in *peer_address, const ssize_t recv_len) {
     Message *msg = msg_load(); // Interpret data as a Message structure.
     log_received_message(peer_address, msg, recv_len);
     
     if (!g_msg_info[msg->message].allow_unknown_sender &&
-        find_peer(peer_address) == NULL) {
+        peer_find(peer_address) == NULL) {
         syserr("Nie znom jo tego chłopa."); // NOTE nie powinno się wywalać, lecz chyba coś powinno wypisywać
     }
 
@@ -1048,9 +1058,9 @@ void join_network(ProgramArgs args) {
     peer_add(&first);
 
     send_hello(&peer_address);
-    uint8_t count = receive_and_handle_hello_reply(&peer_address, &peers);
+    uint16_t count = receive_and_handle_hello_reply(&peer_address, &peers);
 
-    for (uint8_t i = 0; i < count; ++i) {
+    for (uint16_t i = 0; i < count; ++i) {
         _connect(&peers[i]);
     }
     free(peers);

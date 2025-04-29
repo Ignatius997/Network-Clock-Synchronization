@@ -1,4 +1,5 @@
 ---- OTWARTE ----
+0. Znowu coś się psuje z countem w hello reply
 TODO 1.1.1. Co jeśli drugi raz dodajemy ten sam węzeł? (Sprawdzić treść oraz discorda) TO JEST NA DISCORDZIE, ZGLEBIC
     Wg mnie, zdroworozsądkowo trzeba sprawdzić, czy ten węzeł już jest w peerach
     No to jakie mamy sytuacje [`A c B` := connected with, `hello A B` := hello sent to A from B]:

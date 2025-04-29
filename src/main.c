@@ -14,6 +14,9 @@
 #include <signal.h>
 #include <endian.h>
 
+#include "../include/peer.h"
+#include "../include/common.h"
+
 #define DEFAULT_PORT 0
 
 #define ARGOPT_BIND_ADDRESS 'b'
@@ -46,45 +49,11 @@ void syserr(const char *msg) {
     exit(1);
 }
 
-typedef struct __attribute__((__packed__)) {
-    uint8_t     peer_address_length;
-    uint8_t     peer_address[16];
-    uint16_t    peer_port; // trzymane zawsze w big endianess
-} Peer;
-
-Peer peer_init(void) {
-    Peer p;
-    memset(&p, 0, sizeof(Peer));
-    return p;
-}
-
-void peer_print(Peer *p) {
-    fprintf(stderr, "Peer %p:\n", (void*) p);
-    fprintf(stderr, "  Address Length: %u\n", p->peer_address_length);
-    fprintf(stderr, "  Address: ");
-    for (uint8_t i = 0; i < p->peer_address_length; ++i) {
-        fprintf(stderr, "%s%u", (i > 0 ? "." : ""), p->peer_address[i]);
-    }
-    fprintf(stderr, "\n");
-    fprintf(stderr, "  Port: %u\n", ntohs(p->peer_port));
-}
-
-void peer_convert_to_network(Peer *p) {
-    p->peer_port = htons(p->peer_port);
-}
-
-void peer_convert_to_host(Peer *p) {
-    p->peer_port = ntohs(p->peer_port);
-}
-
 /** Node attributes shall be accessible via global variables.
  * Naming convention: g_{name}.
  */
 // NOTE tutaj trzymamy wszystko w host, czyli, w little endianness.
 static int      g_socket_fd; // ofc host order
-static Peer*    g_peers; // Known peer nodes (fields in g_peers are in big endianess).
-static uint16_t g_count; // Number of known peer nodes in host order
-static uint16_t g_peers_capacity; // `g_peers` capacity in host order
 static uint8_t  g_buf[BUF_SIZE] = {0}; // Buffer for read operations.
 
 /** Auxiliary */
@@ -104,8 +73,8 @@ void handle_sigint(int sig) {
 
 void handle_quit(int sig) {
     fprintf(stderr, "\nCaught signal %d (EOF). Printing all peers:\n", sig);
-    for (uint16_t i = 0; i < g_count; ++i) {
-        peer_print(&g_peers[i]);
+    for (uint16_t i = 0; i < peer_get_count(); ++i) {
+        peer_print(&peer_get_all()[i]);
     }
     fprintf(stderr, "\n");
 }
@@ -127,45 +96,6 @@ void setup_signal_handler() {
     if (sigaction(SIGQUIT, &sa, NULL) < 0) {
         syserr("sigaction failed for SIGQUIT");
     }
-}
-
-void peer_add(const Peer *p) {
-    if (g_count == UINT16_MAX) {
-        syserr("Too many peers"); // TODO czy może coś innego zrobić.
-    }
-
-    if (g_count + 1 == g_peers_capacity) {
-        g_peers_capacity = g_peers_capacity << 1; 
-        g_peers = (Peer *) realloc(g_peers, g_peers_capacity * sizeof(Peer));
-        if (g_peers == NULL) syserr("realloc");
-    }
-
-    memcpy(&g_peers[g_count++], p, sizeof(Peer));
-}
-
-/** O(g_count) */
-Peer* peer_find(const struct sockaddr_in *peer_address) {
-    uint16_t port = peer_address->sin_port;
-    uint32_t addr = peer_address->sin_addr.s_addr;
-
-    Peer *p = NULL;
-    for (size_t i = 0; i < g_count; ++i) {
-        if (g_peers[i].peer_port == port &&
-            memcmp(g_peers[i].peer_address, &addr, IPV4_ADDR_LEN) == 0) {
-            p = &g_peers[i];
-            break;
-        }
-    }
-
-    return p;
-}
-
-
-void init_global(void) {
-    g_count = 0;
-    g_peers_capacity = 1;
-    g_peers = (Peer*) malloc(g_peers_capacity * sizeof(Peer));
-    if (g_peers == NULL) syserr("malloc g_peers");
 }
 
 uint32_t get_address(const char *addr) {
@@ -203,32 +133,31 @@ void init_socket(struct sockaddr_in *bind_address, const char *addr, const uint1
     fprintf(stderr, "Listening on port %" PRIu16 "\n", port);
 }
 
-// TODO przeniesc w inne miejsce
-/**
- * Zajumane z labów udp: funkcja `get_server_address`.
- */
-struct sockaddr_in get_peer_address(char const *peer_ip_str, uint16_t port) {
-    struct addrinfo hints;
-    memset(&hints, 0, sizeof(struct addrinfo));
-    hints.ai_family = AF_INET;
-    hints.ai_socktype = SOCK_DGRAM;
-    hints.ai_protocol = IPPROTO_UDP;
+// /**
+//  * Zajumane z labów udp: funkcja `get_server_address`.
+//  */
+// struct sockaddr_in get_peer_address(char const *peer_ip_str, uint16_t port) {
+//     struct addrinfo hints;
+//     memset(&hints, 0, sizeof(struct addrinfo));
+//     hints.ai_family = AF_INET;
+//     hints.ai_socktype = SOCK_DGRAM;
+//     hints.ai_protocol = IPPROTO_UDP;
 
-    struct addrinfo *address_result;
-    int errcode = getaddrinfo(peer_ip_str, NULL, &hints, &address_result);
-    if (errcode != 0) {
-        syserr("getaddrinfo"); // OG: `fatal("getaddrinfo: %s", gai_strerror(errcode));`
-    }
+//     struct addrinfo *address_result;
+//     int errcode = getaddrinfo(peer_ip_str, NULL, &hints, &address_result);
+//     if (errcode != 0) {
+//         syserr("getaddrinfo"); // OG: `fatal("getaddrinfo: %s", gai_strerror(errcode));`
+//     }
 
-    struct sockaddr_in send_address;
-    send_address.sin_family = AF_INET;  // IPv4
-    send_address.sin_addr.s_addr =      // IP address
-        ((struct sockaddr_in *) (address_result->ai_addr))->sin_addr.s_addr;
-    send_address.sin_port = htons(port);
+//     struct sockaddr_in send_address;
+//     send_address.sin_family = AF_INET;  // IPv4
+//     send_address.sin_addr.s_addr =      // IP address
+//         ((struct sockaddr_in *) (address_result->ai_addr))->sin_addr.s_addr;
+//     send_address.sin_port = htons(port);
 
-    freeaddrinfo(address_result);
-    return send_address;
-}
+//     freeaddrinfo(address_result);
+//     return send_address;
+// }
 
 // ---- Program arguments parsing ---- //
 
@@ -752,7 +681,7 @@ void prepare_buffer_for_sending(const Message *msg, const ssize_t peer_index) {
     
     if (msg->message == MSG_HELLO_REPLY) {
         size_t full_len = ntohs(((HelloReplyMessage *)msg)->count) * sizeof(Peer);
-        void *src1  = g_peers;
+        void *src1  = peer_get_all();
         void *dest1 = g_buf + msg_size(msg);
 
         // Load peers to buffer
@@ -817,10 +746,6 @@ ssize_t send_hello(const struct sockaddr_in *peer_address) {
     return send_message(peer_address, (Message *)&msg, -1);
 }
 
-ssize_t peer_index(void *p) {
-    return (ssize_t) (((uintptr_t) p - (uintptr_t) g_peers) / sizeof(Peer));
-}
-
 void send_hello_reply(const struct sockaddr_in *peer_address, SendInfo *sinfo) {
     Peer *p = peer_find(peer_address);
     sinfo->known = p != NULL;
@@ -828,7 +753,7 @@ void send_hello_reply(const struct sockaddr_in *peer_address, SendInfo *sinfo) {
 
     HelloReplyMessage msg = {
         .base.message = MSG_HELLO_REPLY,
-        .count        = sinfo->known ? htons(g_count-1) : htons(g_count),
+        .count        = sinfo->known ? htons(peer_get_count()-1) : htons(peer_get_count()),
     };
 
     size_t full_len = msg_size((Message *)&msg) + ntohs(msg.count) * sizeof(Peer);
@@ -845,16 +770,13 @@ ssize_t send_connect(struct sockaddr_in *peer_address) {
 }
 
 // TODO lepsza nazwa
-void _connect(Peer *p) {
+void _connect(const Peer *p) {
     if (p->peer_address_length != IPV4_ADDR_LEN) syserr("Wrong address");
 
-    // TODO nie da sie sprytniej?
-    char peer_ip_str[INET_ADDRSTRLEN];
-    if (inet_ntop(AF_INET, (struct in_addr *)p->peer_address, peer_ip_str, INET_ADDRSTRLEN) == NULL) {
-        syserr("inet_ntop failed");
-    }
+    struct sockaddr_in peer_address;
+    peer_extract_address(p, &peer_address);
+    // struct sockaddr_in peer_address = get_peer_address(peer_ip_str, ntohs(p->peer_port));
 
-    struct sockaddr_in peer_address = get_peer_address(peer_ip_str, ntohs(p->peer_port));
     send_connect(&peer_address);
 }
 
@@ -1048,7 +970,9 @@ void listen_for_messages() {
 void join_network(ProgramArgs args) {
     if (!args._ar_provided) return;
 
-    struct sockaddr_in peer_address = get_peer_address(args.peer_address, args.peer_port);
+    struct sockaddr_in peer_address;
+    cmn_set_peer_address(args.peer_address, args.peer_port, &peer_address);
+    // struct sockaddr_in peer_address = get_peer_address(args.peer_address, args.peer_port);
     Peer *peers = NULL;
 
     Peer first;
@@ -1069,7 +993,6 @@ void join_network(ProgramArgs args) {
 }
 
 int main(int argc, char* argv[]) {
-    init_global();
     setup_signal_handler(); // Just for debugging I guess.
     init_msg_info();
 

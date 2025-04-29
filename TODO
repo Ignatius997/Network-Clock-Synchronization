@@ -1,4 +1,5 @@
 ---- OTWARTE ----
+TODO get_peer_address: rozbicie na peer_extract_address i cmn_set_address
 0. Biblioteki już teraz
 0. VALIDUJ PEERY W HELLO-REPLY
 0. Sprawdzić w connect i ack_connect, czy nie znamy już tego węzła.

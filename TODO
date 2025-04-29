@@ -1,21 +1,24 @@
 ---- OTWARTE ----
-0. Znowu coś się psuje z countem w hello reply
-TODO 1.1.1. Co jeśli drugi raz dodajemy ten sam węzeł? (Sprawdzić treść oraz discorda) TO JEST NA DISCORDZIE, ZGLEBIC
-    Wg mnie, zdroworozsądkowo trzeba sprawdzić, czy ten węzeł już jest w peerach
-    No to jakie mamy sytuacje [`A c B` := connected with, `hello A B` := hello sent to A from B]:
-        - A c B, hello A B.
-            Każdy węzeł X przy otrzymaniu (każdego) komunikatu hello od pewnego węzła Y musi sprawdzić, czy XcY.
-            Jeśli XcY, to X wysyła wszystkie jego peery OPRÓCZ Y i nie dodaje (ponownie) Y do swoich peerów.
-
-            Każdy węzeł Y przy wysyłaniu (każdego komunikatu) hello do pewnego węzła X musi sprawdzić, czy XcY.
-            Jeśli XcY, to Y nie dodaje (ponownie) X do swoich peerów.
-
-            Każdy węzeł Y przy odbieraniu (każdego komunikatu) hello-reply powinien sprawdzić, czy przesłany peer
-            już u niego jest (to zapewne wymaga przechowywania Peerów w drzewie).
 0. Biblioteki już teraz
 0. VALIDUJ PEERY W HELLO-REPLY
 0. Sprawdzić w connect i ack_connect, czy nie znamy już tego węzła.
 0. Reformacja wysyłania: zaaplikować SendInfo
+1.1.1. Co jeśli drugi raz dodajemy ten sam węzeł? (Sprawdzić treść oraz discorda) TO JEST NA DISCORDZIE, ZGLEBIC
+    Wg mnie, zdroworozsądkowo trzeba sprawdzić, czy ten węzeł już jest w peerach
+    No to jakie mamy sytuacje [`A c B` := connected with, `hello A B` := hello sent to A from B]:
+        - A c B, hello A B.
+            1. Każdy węzeł X przy otrzymaniu (każdego) komunikatu hello od pewnego węzła Y musi sprawdzić, czy XcY.
+            Jeśli XcY, to X wysyła wszystkie jego peery OPRÓCZ Y i nie dodaje (ponownie) Y do swoich peerów. DONE
+
+            2. Każdy węzeł Y przy wysyłaniu (każdego komunikatu) hello do pewnego węzła X musi sprawdzić, czy XcY.
+            Jeśli XcY, to Y nie dodaje (ponownie) X do swoich peerów.
+
+            3. Każdy węzeł Y przy odbieraniu (każdego komunikatu) hello-reply powinien sprawdzić, czy przesłany peer
+            już u niego jest (to zapewne wymaga przechowywania Peerów w drzewie).
+            
+            Te dwie (2,3) sytuacje są skrajnie nieprawdopodobne, jako że musialby zostac wysłany connect od innego
+            węzła między wysłaniem hello a odebraniem hello-reply. Warto ją jednak uwzględnić.
+1.1.1.1. Czy akceptujemy connect-y bez reply-a?
 1.1.2 Co jeśli u starego węzła nie starcza miejsca na nowego? Problem jest też taki, że establish_connection u starego robimy na końcu handle_hello.
 1.1.3. Kiedy węzły A B, które wysyłają sobie hello-reply, powinny dodać siebie do listy peerów?
 1.2. Posprzątać!

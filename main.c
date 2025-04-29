@@ -896,9 +896,7 @@ uint8_t receive_and_handle_hello_reply(struct sockaddr_in *peer_address, Peer **
 
         fprintf(stderr, "Peers from HELLO_REPLY:\n");
         for (size_t i = 0; i < peers_count; ++i) {
-            // peer_convert_to_host(&(*peers)[i]);
             peer_print(&(*peers)[i]);
-            // FIXME Validate!
         }
         fprintf(stderr, "\n");
     }

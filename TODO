@@ -13,6 +13,9 @@ TODO 1.1.1. Co jeśli drugi raz dodajemy ten sam węzeł? (Sprawdzić treść or
             Każdy węzeł Y przy odbieraniu (każdego komunikatu) hello-reply powinien sprawdzić, czy przesłany peer
             już u niego jest (to zapewne wymaga przechowywania Peerów w drzewie).
 0. Biblioteki już teraz
+0. VALIDUJ PEERY W HELLO-REPLY
+0. Sprawdzić w connect i ack_connect, czy nie znamy już tego węzła.
+0. Reformacja wysyłania: zaaplikować SendInfo
 1.1.2 Co jeśli u starego węzła nie starcza miejsca na nowego? Problem jest też taki, że establish_connection u starego robimy na końcu handle_hello.
 1.1.3. Kiedy węzły A B, które wysyłają sobie hello-reply, powinny dodać siebie do listy peerów?
 1.2. Posprzątać!

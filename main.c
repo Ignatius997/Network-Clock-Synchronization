@@ -817,10 +817,14 @@ ssize_t send_hello(const struct sockaddr_in *peer_address) {
     return send_message(peer_address, (Message *)&msg, -1);
 }
 
+ssize_t peer_index(void *p) {
+    return (ssize_t) (((uintptr_t) p - (uintptr_t) g_peers) / sizeof(Peer));
+}
+
 void send_hello_reply(const struct sockaddr_in *peer_address, SendInfo *sinfo) {
     Peer *p = peer_find(peer_address);
     sinfo->known = p != NULL;
-    ssize_t pind = sinfo->known ? (uintptr_t) p - (uintptr_t) g_peers : -1;
+    ssize_t pind = sinfo->known ? peer_index(p) : -1;
 
     HelloReplyMessage msg = {
         .base.message = MSG_HELLO_REPLY,
@@ -909,7 +913,7 @@ void handle_hello(const struct sockaddr_in *peer_address) {
     SendInfo info;
     send_hello_reply(peer_address, &info);
 
-    if (info.known) {
+    if (!info.known) {
         establish_connection(peer_address);
     }
 }

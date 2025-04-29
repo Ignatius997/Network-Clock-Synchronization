@@ -112,6 +112,7 @@ void init_socket(struct sockaddr_in *bind_address, const char *addr, const uint1
     init_addr(bind_address, addr, port);
 
     if (bind(g_socket_fd, (struct sockaddr *) bind_address, (socklen_t) sizeof(*bind_address)) < 0) {
+        close_socket(g_socket_fd);
         syserr("bind");
     }
 
@@ -267,6 +268,7 @@ void args_print(ProgramArgs *args) {
     fprintf(stderr, "  Port: %u\n", args->port);
     fprintf(stderr, "  Peer Address: %s\n", args->peer_address ? args->peer_address : "NULL");
     fprintf(stderr, "  Peer Port: %u\n", args->peer_port);
+    fprintf(stderr, "\n");
 }
 
 // ==== Node Message Struct ==== // Lepsza nazwa ofc
@@ -956,7 +958,7 @@ void join_network(ProgramArgs args) {
     if (!args._ar_provided) return;
 
     struct sockaddr_in peer_address;
-    cmn_set_address(args.peer_address, args.peer_port, &peer_address);
+    cmn_set_address(args.peer_address, htons(args.peer_port), &peer_address);
     // struct sockaddr_in peer_address = get_peer_address(args.peer_address, args.peer_port);
     Peer *peers = NULL;
 
@@ -984,6 +986,7 @@ int main(int argc, char* argv[]) {
 
     ProgramArgs program_args = args_default();
     args_parse(argc, argv, &program_args);
+    args_print(&program_args);
     args_validate(&program_args);
 
     struct sockaddr_in bind_address; // To avoid allocation on the stack.

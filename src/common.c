@@ -25,7 +25,7 @@ void close_socket(const int sockfd) {
 
 /**
  * Zajumane z labów udp: funkcja `get_server_address`.
- * `port` is in network order
+ * `port` must be in network order
  */
 void cmn_set_address(char const *peer_ip_str, const uint16_t port, struct sockaddr_in *addr) {
     struct addrinfo hints;

@@ -3,8 +3,6 @@
 
 #include <stdint.h>
 #include <netinet/in.h>
-#include <unistd.h>
-#include <stdbool.h>
 
 /** Structure representing peer.
  * `peer_port` field is *always* held in network order.
@@ -16,13 +14,14 @@ typedef struct __attribute__((__packed__)) {
 } Peer;
 
 // Funkcje do zarządzania peerami
-void peer_init(void); // Inicjalizacja globalnych zmiennych związanych z peerami
 void peer_cleanup(void); // Zwolnienie pamięci związanej z peerami
 void peer_add(const Peer *p); // Dodanie nowego peera
-void peer_extract_address(const Peer *p, struct sockaddr_in *addr)
+void peer_extract_address(const Peer *p, struct sockaddr_in *addr);
 
-Peer* peer_find(const struct sockaddr_in *peer_address); // Znalezienie peera na podstawie adresu
-ssize_t peer_index(Peer *p);
+int peer_validate(const Peer *p);
+
+Peer*   peer_find(const struct sockaddr_in *peer_address); // Znalezienie peera na podstawie adresu
+ssize_t peer_index(const Peer *p);
 
 // Funkcje do zarządzania listą peerów
 uint16_t peer_get_count(void); // Pobranie liczby znanych peerów

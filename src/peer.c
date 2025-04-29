@@ -5,8 +5,8 @@
 #include <string.h>
 #include <errno.h>
 
-#include "include/common.h"
-#include "include/peer.h"
+#include "../include/common.h"
+#include "../include/peer.h"
 
 typedef struct {
     Peer *peers;
@@ -15,12 +15,6 @@ typedef struct {
 } PeerManager;
 
 static PeerManager peer_manager = {NULL, 0, 0};
-
-Peer peer_init(void) {
-    Peer p;
-    memset(&p, 0, sizeof(Peer));
-    return p;
-}
 
 void peer_cleanup(void) {
     free(peer_manager.peers);
@@ -53,6 +47,11 @@ void peer_extract_address(const Peer *p, struct sockaddr_in *addr) {
     cmn_set_address(peer_ip_str, p->peer_port, addr);
 }
 
+int peer_validate(const Peer *p) {
+    (void)p; // FIXME implement
+    return 0;
+}
+
 /** O(peer_manager.count) */
 Peer* peer_find(const struct sockaddr_in *peer_address) {
     uint16_t port = peer_address->sin_port;
@@ -61,7 +60,7 @@ Peer* peer_find(const struct sockaddr_in *peer_address) {
     Peer *p = NULL;
     for (size_t i = 0; i < peer_manager.count; ++i) {
         if (peer_manager.peers[i].peer_port == port &&
-            memcmp(peer_manager.peers[i].peer_address, &addr, IPV4_ADDR_LEN) == 0) {
+            memcmp(peer_manager.peers[i].peer_address, &addr, 4 /*FIXME IPV4_ADDR_LEN*/) == 0) {
             p = &peer_manager.peers[i];
             break;
         }
@@ -70,12 +69,12 @@ Peer* peer_find(const struct sockaddr_in *peer_address) {
     return p;
 }
 
-ssize_t peer_index(void *p) {
+ssize_t peer_index(const Peer *p) {
     return (ssize_t) (((uintptr_t) p - (uintptr_t) peer_manager.peers) / sizeof(Peer));
 }
 
 uint16_t peer_get_count(void) {
-    return peer_manager.peers;
+    return peer_manager.count;
 }
 
 Peer* peer_get_all(void) {

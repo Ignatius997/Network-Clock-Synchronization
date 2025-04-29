@@ -1,33 +1,37 @@
-# Kompilator i flagi
-CC = gcc
-CFLAGS = -Wall -Wextra -O0 -g -Iinclude
-TARGET = netclocksync
+# Nazwa binarnego pliku wynikowego
+TARGET = $(BUILD_DIR)/netclocksync
 
 # Katalogi
 SRC_DIR = src
-BUILD_DIR = build
 INCLUDE_DIR = include
+BUILD_DIR = build
+
+# Kompilator i flagi
+CC = gcc
+CFLAGS = -I$(INCLUDE_DIR) -Wall -Wextra
+LDFLAGS = 
 
 # Pliki źródłowe i obiektowe
-SRC = $(wildcard $(SRC_DIR)/*.c)
-OBJ = $(patsubst $(SRC_DIR)/%.c, $(BUILD_DIR)/%.o, $(SRC))
-
-# Reguła budowania obiektów
-$(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)
-    $(CC) $(CFLAGS) -c $< -o $@
-
-# Reguła budowania programu
-$(TARGET): $(OBJ)
-    $(CC) $(CFLAGS) -o $(BUILD_DIR)/$@ $^
+SRCS = $(wildcard $(SRC_DIR)/*.c)
+OBJS = $(patsubst $(SRC_DIR)/%.c, $(BUILD_DIR)/%.o, $(SRCS))
 
 # Reguła główna
-all: $(BUILD_DIR) $(TARGET)
+all: $(TARGET)
 
-# Tworzenie katalogu build
-$(BUILD_DIR):
-    mkdir -p $(BUILD_DIR)
+# Tworzenie pliku binarnego
+$(TARGET): $(OBJS)
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(OBJS) $(LDFLAGS) -o $@
+	@rm -f $(OBJS)
 
-# Czyszczenie
+# Kompilacja plików .c do obiektów .o
+$(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# Czyszczenie plików wynikowych
 clean:
-    rm -f $(OBJ) $(BUILD_DIR)/$(TARGET)
-    rm -rf $(BUILD_DIR)
+	rm -rf $(BUILD_DIR)
+
+# Dodanie reguły PHONY (nie dotyczy plików)
+.PHONY: all clean

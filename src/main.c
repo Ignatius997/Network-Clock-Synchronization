@@ -40,34 +40,17 @@
 
 #define BUF_SIZE 65535 // FIXME myślę, że więcej
 
-void close_socket(void);
-
-// TODO: Skopiować mimową bibliotekę errorową. Czy można?
-void syserr(const char *msg) {
-    fprintf(stderr, "%s, closing socket and exiting...\n", msg);
-    close_socket();
-    exit(1);
-}
-
 /** Node attributes shall be accessible via global variables.
  * Naming convention: g_{name}.
  */
 // NOTE tutaj trzymamy wszystko w host, czyli, w little endianness.
-static int      g_socket_fd; // ofc host order
-static uint8_t  g_buf[BUF_SIZE] = {0}; // Buffer for read operations.
-
-/** Auxiliary */
-void close_socket(void) {
-    if (g_socket_fd >= 0) {
-        close(g_socket_fd);
-        fprintf(stderr, "Socket closed.\n");
-    }
-}
+int      g_socket_fd; // ofc host order
+uint8_t  g_buf[BUF_SIZE]; // Buffer for read operations.
 
 /** Auxiliary */
 void handle_sigint(int sig) {
     fprintf(stderr, "\nCaught signal %d (SIGINT). Closing socket and exiting...\n", sig);
-    close_socket();
+    close_socket(g_socket_fd);
     exit(130);
 }
 
@@ -77,6 +60,8 @@ void handle_quit(int sig) {
         peer_print(&peer_get_all()[i]);
     }
     fprintf(stderr, "\n");
+    close_socket(g_socket_fd);
+    exit(1);
 }
 
 /** Auxiliary */
@@ -628,7 +613,7 @@ int validate_peers(const Message *msg) {
             fprintf(stderr, "Validating peers:\n");
             for (size_t i = 0; i < peers_count; ++i) {
                 Peer *p = (Peer *) (g_buf + offset);
-                // peer_print(p); // FIXME actually validate
+                peer_validate(p);
                 offset += sizeof(Peer);
             }
         }
@@ -971,7 +956,7 @@ void join_network(ProgramArgs args) {
     if (!args._ar_provided) return;
 
     struct sockaddr_in peer_address;
-    cmn_set_peer_address(args.peer_address, args.peer_port, &peer_address);
+    cmn_set_address(args.peer_address, args.peer_port, &peer_address);
     // struct sockaddr_in peer_address = get_peer_address(args.peer_address, args.peer_port);
     Peer *peers = NULL;
 
@@ -993,6 +978,7 @@ void join_network(ProgramArgs args) {
 }
 
 int main(int argc, char* argv[]) {
+    memset(g_buf, 0, BUF_SIZE);
     setup_signal_handler(); // Just for debugging I guess.
     init_msg_info();
 
@@ -1006,6 +992,6 @@ int main(int argc, char* argv[]) {
     join_network(program_args);
     listen_for_messages();
     
-    close(g_socket_fd);
+    close_socket(g_socket_fd);
     return 0;
 }

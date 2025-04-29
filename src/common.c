@@ -6,8 +6,22 @@
 #include <netdb.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <unistd.h>
 
-#include "include/common.h"
+#include "../include/common.h"
+
+// TODO: Skopiować mimową bibliotekę errorową. Czy można?
+void syserr(const char *msg) {
+    fprintf(stderr, "%s, exiting...\n", msg);
+    exit(1);
+}
+
+void close_socket(const int sockfd) {
+    if (sockfd >= 0) {
+        close(sockfd);
+        fprintf(stderr, "Socket closed.\n");
+    }
+}
 
 /**
  * Zajumane z labów udp: funkcja `get_server_address`.
@@ -32,5 +46,4 @@ void cmn_set_address(char const *peer_ip_str, const uint16_t port, struct sockad
     addr->sin_port = port;
 
     freeaddrinfo(address_result);
-    return send_address;
 }

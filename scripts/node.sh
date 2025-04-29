@@ -12,11 +12,16 @@ peer_port=$2
 
 clear
 
+# Determine the directory of the script
+script_dir=$(dirname "$(realpath "$0")")
+build_dir="$script_dir/../build"
+netclocksync="$build_dir/netclocksync"
+
 # Build the command based on the arguments
 if [ -z "$peer_port" ]; then
-    cmd="./netclocksync -b 127.0.0.1 -p $my_port"
+    cmd="$netclocksync -b 127.0.0.1 -p $my_port"
 else
-    cmd="./netclocksync -b 127.0.0.1 -p $my_port -a 127.0.0.1 -r $peer_port"
+    cmd="$netclocksync -b 127.0.0.1 -p $my_port -a 127.0.0.1 -r $peer_port"
 fi
 
 # Display the command

@@ -7,6 +7,7 @@
 
 #include "../include/common.h"
 #include "../include/peer.h"
+#include "../include/err.h"
 
 typedef struct {
     Peer *peers;

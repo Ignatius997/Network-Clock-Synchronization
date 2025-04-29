@@ -6,6 +6,7 @@
         "string_view": "c",
         "bitset": "c",
         "initializer_list": "c",
-        "stdio.h": "c"
+        "stdio.h": "c",
+        "common.h": "c"
     }
 }

@@ -16,13 +16,9 @@
 
 #include "../include/peer.h"
 #include "../include/common.h"
-
-#define DEFAULT_PORT 0
-
-#define ARGOPT_BIND_ADDRESS 'b'
-#define ARGOPT_PORT         'p'
-#define ARGOPT_PEER_ADDRESS 'a'
-#define ARGOPT_PEER_PORT    'r'
+#include "../include/err.h"
+#include "../include/args.h"
+#include "../include/sigman.h"
 
 #define MSG_HELLO           1
 #define MSG_HELLO_REPLY     2
@@ -43,233 +39,8 @@
 /** Node attributes shall be accessible via global variables.
  * Naming convention: g_{name}.
  */
-// NOTE tutaj trzymamy wszystko w host, czyli, w little endianness.
 int      g_socket_fd; // ofc host order
 uint8_t  g_buf[BUF_SIZE]; // Buffer for read operations.
-
-/** Auxiliary */
-void handle_sigint(int sig) {
-    fprintf(stderr, "\nCaught signal %d (SIGINT). Closing socket and exiting...\n", sig);
-    close_socket(g_socket_fd);
-    exit(130);
-}
-
-void handle_quit(int sig) {
-    fprintf(stderr, "\nCaught signal %d (EOF). Printing all peers:\n", sig);
-    for (uint16_t i = 0; i < peer_get_count(); ++i) {
-        peer_print(&peer_get_all()[i]);
-    }
-    fprintf(stderr, "\n");
-    close_socket(g_socket_fd);
-    exit(1);
-}
-
-/** Auxiliary */
-void setup_signal_handler() {
-    struct sigaction sa;
-    memset(&sa, 0, sizeof(sa));
-
-    // Obsługa SIGINT
-    sa.sa_handler = handle_sigint;
-    if (sigaction(SIGINT, &sa, NULL) < 0) {
-        syserr("sigaction failed for SIGINT");
-    }
-
-    // Obsługa SIGQUIT (EOF)
-    memset(&sa, 0, sizeof(sa));
-    sa.sa_handler = handle_quit;
-    if (sigaction(SIGQUIT, &sa, NULL) < 0) {
-        syserr("sigaction failed for SIGQUIT");
-    }
-}
-
-uint32_t get_address(const char *addr) {
-    uint32_t inaddr = addr == NULL ? htonl(INADDR_ANY) : inet_addr(addr);
-    if (inaddr == INADDR_NONE && addr != NULL) {
-        syserr("Invalid IPv4 address");
-    }
-
-    return inaddr;
-}
-
-// TODO przenieść w inne miejsce
-void init_addr(struct sockaddr_in *bind_address, const char *addr, const uint16_t port) {
-    // NOTE kod i komentarz zajumany z echo-server.c z labów udp.
-    // Bind the socket to a concrete address
-    bind_address->sin_family = AF_INET; // IPv4
-    bind_address->sin_addr.s_addr = get_address(addr);
-    bind_address->sin_port = htons(port);
-}
-
-// TODO obsłużyć przypadek bez podanego portu (chyba obsluzony, bo port wtedy jest rowny 0)
-// TODO przenieść w inne miejsce
-void init_socket(struct sockaddr_in *bind_address, const char *addr, const uint16_t port) {
-    g_socket_fd = socket(AF_INET, SOCK_DGRAM, 0);
-    if (g_socket_fd < 0) {
-        syserr("Socket creation failed");
-    }
-
-    init_addr(bind_address, addr, port);
-
-    if (bind(g_socket_fd, (struct sockaddr *) bind_address, (socklen_t) sizeof(*bind_address)) < 0) {
-        close_socket(g_socket_fd);
-        syserr("bind");
-    }
-
-    fprintf(stderr, "Listening on port %" PRIu16 "\n", port);
-}
-
-// /**
-//  * Zajumane z labów udp: funkcja `get_server_address`.
-//  */
-// struct sockaddr_in get_peer_address(char const *peer_ip_str, uint16_t port) {
-//     struct addrinfo hints;
-//     memset(&hints, 0, sizeof(struct addrinfo));
-//     hints.ai_family = AF_INET;
-//     hints.ai_socktype = SOCK_DGRAM;
-//     hints.ai_protocol = IPPROTO_UDP;
-
-//     struct addrinfo *address_result;
-//     int errcode = getaddrinfo(peer_ip_str, NULL, &hints, &address_result);
-//     if (errcode != 0) {
-//         syserr("getaddrinfo"); // OG: `fatal("getaddrinfo: %s", gai_strerror(errcode));`
-//     }
-
-//     struct sockaddr_in send_address;
-//     send_address.sin_family = AF_INET;  // IPv4
-//     send_address.sin_addr.s_addr =      // IP address
-//         ((struct sockaddr_in *) (address_result->ai_addr))->sin_addr.s_addr;
-//     send_address.sin_port = htons(port);
-
-//     freeaddrinfo(address_result);
-//     return send_address;
-// }
-
-// ---- Program arguments parsing ---- //
-
-typedef struct ProgramArgs {
-    char        *bind_address;
-    uint16_t    port;
-    char        *peer_address;
-    uint16_t    peer_port;
-    
-    bool        _ar_provided;
-} ProgramArgs;
-
-ProgramArgs args_default() {
-    return (ProgramArgs) {
-        .bind_address   = NULL,
-        .port           = DEFAULT_PORT,
-        .peer_address   = NULL,
-        .peer_port      = DEFAULT_PORT,
-    
-        ._ar_provided           = false,
-    };
-}
-
-void args_validate(const ProgramArgs *program_args) {
-    (void)program_args;
-    // TODO Implement
-}
-
-regex_t argument_option_regex(void) {
-    const char *pattern = "^-[bpar]$";
-    regex_t regex;
-    
-    if (regcomp(&regex, pattern, REG_EXTENDED) != 0)
-        syserr("Regex compilation failed!");
-
-    return regex;
-}
-
-/**
- * "Ukradzione" z kodu z laboratoriów.
- */
-uint16_t read_port(char const *string) {
-    char *endptr;
-    errno = 0;
-    unsigned long port = strtoul(string, &endptr, 10);
-    
-    if (errno != 0 || *endptr != 0 || port == 0 || port > UINT16_MAX) {
-        syserr("Given port is not a valid port number"); // FIXME w oryginalne `fatal`.
-        // OG: fatal("%s is not a valid port number", string);
-    }
-
-    return (uint16_t) port;
-}
-
-void args_load_value(char *arg, const char opt, ProgramArgs *program_args) {
-    switch (opt) {
-        case ARGOPT_BIND_ADDRESS:
-            program_args->bind_address = arg;
-            break;
-
-        case ARGOPT_PORT:
-            program_args->port = read_port(arg);
-            break;
-
-        case ARGOPT_PEER_ADDRESS:
-            program_args->peer_address = arg;
-            break;
-
-        case ARGOPT_PEER_PORT:
-            program_args->peer_port = read_port(arg);
-            break;
-
-        default:
-            syserr("ERROR Regex or switch case failed"); // TODO lepszy komunikat.
-    }
-}
-
-void args_parse(int argc, char* argv[], ProgramArgs *program_args) {
-    if ((argc-1) % 2 == 1) syserr("Incorrect arguments: odd number..."); // TODO Better message. But should we even consider it an error?
-    
-    regex_t argopt_regex = argument_option_regex();
-
-    // FIXME: Ewentualnie można zamienić na sprawdzanie parzystości i.
-    bool option = true; // Tells, whether a flag an option, i.e. "-b" is required.
-    char opt;
-    // int ar = 0; // TODO Lepsza nazwa.ń
-    bool a_provided = false, r_provided = false;
-
-    for (int i = 1; i < argc; ++i) {
-        if (option) {
-            if (regexec(&argopt_regex, argv[i], 0, NULL, 0) != 0) {
-                syserr("Wrong parameters!"); // TODO Print usage.
-            } else {
-                opt = argv[i][1];
-            }
-        } else {
-            args_load_value(argv[i], opt, program_args);
-            if (opt == ARGOPT_PEER_ADDRESS) {
-                a_provided = true;
-            } else if (opt == ARGOPT_PEER_PORT) {
-                r_provided = true;
-            }
-        }
-
-        option = !option;
-    }
-
-    regfree(&argopt_regex);
-    if (a_provided == r_provided) {
-        program_args->_ar_provided = a_provided;
-    } else {
-        syserr("-a and -r not provided both."); // TODO Better message.
-    }
-}
-
-/**
- * Passed by pointer to print accurate address.
- */
-void args_print(ProgramArgs *args) {
-    fprintf(stderr, "ProgramArgs %p:\n", (void*) args);
-    fprintf(stderr, "  Bind Address: %s\n", args->bind_address ? args->bind_address : "NULL");
-    fprintf(stderr, "  Port: %u\n", args->port);
-    fprintf(stderr, "  Peer Address: %s\n", args->peer_address ? args->peer_address : "NULL");
-    fprintf(stderr, "  Peer Port: %u\n", args->peer_port);
-    fprintf(stderr, "\n");
-}
 
 // ==== Node Message Struct ==== // Lepsza nazwa ofc
 
@@ -981,7 +752,7 @@ void join_network(ProgramArgs args) {
 
 int main(int argc, char* argv[]) {
     memset(g_buf, 0, BUF_SIZE);
-    setup_signal_handler(); // Just for debugging I guess.
+    sig_setup_signal_handler(); // Just for debugging I guess.
     init_msg_info();
 
     ProgramArgs program_args = args_default();
@@ -990,7 +761,7 @@ int main(int argc, char* argv[]) {
     args_validate(&program_args);
 
     struct sockaddr_in bind_address; // To avoid allocation on the stack.
-    init_socket(&bind_address, program_args.bind_address, program_args.port);
+    init_socket(&g_socket_fd, &bind_address, program_args.bind_address, program_args.port);
     
     join_network(program_args);
     listen_for_messages();

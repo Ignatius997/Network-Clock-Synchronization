@@ -6,13 +6,11 @@
 #include <unistd.h>
 
 #include "../include/sigman.h"
-#include "../include/common.h"
 #include "../include/peer.h"
 #include "../include/err.h"
 
 static void sig_handle_sigint(int sig) {
     fprintf(stderr, "\nCaught signal %d (SIGINT). Closing socket and exiting...\n", sig);
-    // cmn_close_socket(g_socket_fd); NOTE Jebać ten fd, niech sam sobie poradzi
     exit(130);
 }
 
@@ -22,7 +20,6 @@ static void sig_handle_quit(int sig) {
         peer_print(&peer_get_all()[i]);
     }
     fprintf(stderr, "\n");
-    // cmn_close_socket(g_socket_fd); NOTE znowu przeklęty fd
     exit(1);
 }
 

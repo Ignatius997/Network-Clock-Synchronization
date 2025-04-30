@@ -1,6 +1,8 @@
 ---- OTWARTE ----
 TODO get_peer_address: rozbicie na peer_extract_address i cmn_set_address
 0. Biblioteki już teraz
+0. Dac Msginfo i Sendinfo do oddzielnych bibliotek, jak ReceiveInfo
+0. Odbieranie Hello reply w switch case
 0. VALIDUJ PEERY W HELLO-REPLY
 0. Sprawdzić w connect i ack_connect, czy nie znamy już tego węzła.
 0. Reformacja wysyłania: zaaplikować SendInfo
@@ -37,6 +39,7 @@ TODO get_peer_address: rozbicie na peer_extract_address i cmn_set_address
 9. Sprawdzić wszystkie inet_*, w szczególności inet_pton i konwertowanie tych adresów do różnych form
 10. W sumie to te makra można zamienić na enum.
 11. Spoofing
+12. Niech kompiluje się tylko to, co ma się kompilować (bazując na zmianach w plikach?)
 
 Komentowanie
 Wspomnieć, że niektóre ify są dla "extensibility".

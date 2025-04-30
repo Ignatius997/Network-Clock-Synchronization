@@ -2,7 +2,6 @@
 #define ARGS_H
 
 #include <stdbool.h>
-#include <regex.h>
 #include <stdint.h>
 
 #define DEFAULT_PORT 0
@@ -28,7 +27,5 @@ void args_validate(const ProgramArgs *program_args);
 void args_load_value(char *arg, const char opt, ProgramArgs *program_args);
 void args_parse(int argc, char *argv[], ProgramArgs *program_args);
 void args_print(ProgramArgs *args);
-
-regex_t argument_option_regex(void);
 
 #endif // ARGS_H

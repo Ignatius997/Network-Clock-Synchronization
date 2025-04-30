@@ -6,7 +6,7 @@
 #include <stdint.h>
 
 #include "../include/args.h"
-#include "../include/common.h"
+#include "../include/netutil.h"
 #include "../include/err.h"
 
 ProgramArgs args_default() {
@@ -25,7 +25,7 @@ void args_validate(const ProgramArgs *program_args) {
     // TODO Implement
 }
 
-regex_t argument_option_regex(void) {
+static regex_t argument_option_regex(void) {
     const char *pattern = "^-[bpar]$";
     regex_t regex;
     
@@ -42,7 +42,7 @@ void args_load_value(char *arg, const char opt, ProgramArgs *program_args) {
             break;
 
         case ARGOPT_PORT:
-            program_args->port = cmn_read_port(arg);
+            program_args->port = nutil_read_port(arg);
             break;
 
         case ARGOPT_PEER_ADDRESS:
@@ -50,7 +50,7 @@ void args_load_value(char *arg, const char opt, ProgramArgs *program_args) {
             break;
 
         case ARGOPT_PEER_PORT:
-            program_args->peer_port = cmn_read_port(arg);
+            program_args->peer_port = nutil_read_port(arg);
             break;
 
         default:

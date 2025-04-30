@@ -5,7 +5,6 @@
 #include <string.h>
 #include <errno.h>
 
-#include "../include/common.h"
 #include "../include/peer.h"
 #include "../include/err.h"
 
@@ -36,21 +35,6 @@ void peer_add(const Peer *p) {
     }
 
     memcpy(&peer_manager.peers[peer_manager.count++], p, sizeof(Peer));
-}
-
-void peer_extract_address(const Peer *p, struct sockaddr_in *addr) {
-    // TODO nie da sie sprytniej?
-    char peer_ip_str[INET_ADDRSTRLEN];
-    if (inet_ntop(AF_INET, (struct in_addr *)p->peer_address, peer_ip_str, INET_ADDRSTRLEN) == NULL) {
-        syserr("inet_ntop failed");
-    }
-
-    cmn_set_address(peer_ip_str, p->peer_port, addr);
-}
-
-int peer_validate(const Peer *p) {
-    (void)p; // FIXME implement
-    return 0;
 }
 
 /** O(peer_manager.count) */
@@ -91,4 +75,11 @@ void peer_print(const Peer *p) {
     }
     fprintf(stderr, "\n");
     fprintf(stderr, "  Port: %u\n", ntohs(p->peer_port));
+}
+
+void peer_all_print(const Peer *peers, size_t size) {
+    for (size_t i = 0; i < size; ++i) {
+        peer_print(&peers[i]);
+    }
+    fprintf(stderr, "\n");
 }

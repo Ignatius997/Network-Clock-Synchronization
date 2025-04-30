@@ -15,7 +15,7 @@
 #include <endian.h>
 
 #include "../include/peer.h"
-#include "../include/common.h"
+#include "../include/netutil.h"
 #include "../include/err.h"
 #include "../include/args.h"
 #include "../include/sigman.h"
@@ -78,80 +78,7 @@ void log_sending_peers(const Message *msg) {
     }
 }
 
-// NOTE Daj w inne miejsce
-int validate_received_length(const ssize_t recv_len, const Message *msg) {
-    // NOTE Program nie powinien się wywalać przy jednym złym receive, ale początkowo tak zróbmy dla świętego spokoju i debugowania
-    
-    if (recv_len < 0) {
-        syserr("recvfrom failed");
-    }
-
-    if (recv_len < (ssize_t) msg_size(msg)) {
-        syserr("recvfrom less bytes than message size."); // Można dodać rodzaj msg
-        return 1;
-    }
-
-    return 0; // NOTE Na przyszłość (patrz linijka wyżej).
-}
-
-// NOTE Daj w inne miejsce
-void validate_address(const struct sockaddr_in *addr) {
-    if (addr->sin_family != AF_INET) {
-        syserr("Invalid address family");
-    }
-
-    // TODO Should we check it?
-    // if (addr->sin_port == 0) {
-    //     syserr("Port number is zero");
-    // }
-    
-    // if (addr->sin_addr.s_addr == INADDR_NONE) {
-    //     syserr("Invalid IP address");
-    // }
-}
-
-int validate_peers(const Message *msg) {
-    if (msg->message == MSG_HELLO_REPLY) { // For extensibility.
-        uint16_t peers_count = ntohs(((HelloReplyMessage *)msg)->count);
-        
-        if (peers_count > 0) {
-            size_t offset = msg_size(msg);
-            
-            fprintf(stderr, "Validating peers:\n");
-            for (size_t i = 0; i < peers_count; ++i) {
-                Peer *p = (Peer *) (g_buf + offset);
-                peer_validate(p);
-                offset += sizeof(Peer);
-            }
-        }
-        fprintf(stderr, "\n");
-    }
-    
-    return 0; // NOTE Success
-}
-
-int validate_received_data(const struct sockaddr_in *peer_address, const ssize_t recv_len, const Message *msg) {
-    int ret = validate_received_length(recv_len, msg);
-    validate_address(peer_address);
-    if (msg->message == MSG_HELLO_REPLY) validate_peers(msg);
-    return ret; // NOTE Potem, gdy nie będziemy rzucali syserr w przypadku recv_len < msg_size, będziemy mogli jakoś to lepiej obsłużyc
-}
-
 // TODO Usystematyzować wysyłanie
-
-// TODO Możnaby to jakoś ujednolicić, żeby dołączający z _ar_provided też mógł użyć takiej funkcji
-void establish_connection(const struct sockaddr_in *peer_address) {
-    uint8_t ip[16];
-    memset(ip, 0, sizeof(ip));
-    memcpy(ip, &peer_address->sin_addr, IPV4_ADDR_LEN);
-
-    Peer p;
-    p.peer_address_length = IPV4_ADDR_LEN;
-    memcpy(p.peer_address, ip, IPV4_ADDR_LEN);
-    p.peer_port = peer_address->sin_port; // NOTE bez konwertowania
-
-    peer_add(&p);
-}
 
 // NOTE za długa nazwa
 // NOTE można by to uogólnić, jednak w sumie jakiekolwiek uogólnienie to po prostu memcpy :)
@@ -249,17 +176,6 @@ ssize_t send_connect(struct sockaddr_in *peer_address) {
     return send_message(peer_address, (Message *)&msg, -1);
 }
 
-// TODO lepsza nazwa
-void _connect(const Peer *p) {
-    if (p->peer_address_length != IPV4_ADDR_LEN) syserr("Wrong address");
-
-    struct sockaddr_in peer_address;
-    peer_extract_address(p, &peer_address);
-
-    send_connect(&peer_address);
-}
-
-
 ssize_t send_ack_connect(const struct sockaddr_in *peer_address) {
     AckConnectMessage msg = {
         .base.message = MSG_ACK_CONNECT
@@ -272,7 +188,7 @@ ssize_t receive_message(struct sockaddr_in *peer_address) {
     socklen_t addr_len = (socklen_t) sizeof(*peer_address);
     ssize_t recv_len = recvfrom(g_socket_fd, g_buf, sizeof(g_buf), 0,
                                 (struct sockaddr *) peer_address, &addr_len);
-    int val = validate_received_data(peer_address, recv_len, (Message *)g_buf);
+    int val = nutil_validate_received_data(peer_address, g_buf,recv_len);
     (void)val; // NOTE nieużyta zmienna
 
     return recv_len;
@@ -306,148 +222,32 @@ uint8_t receive_and_handle_hello_reply(struct sockaddr_in *peer_address, Peer **
     return peers_count;
 }
 
-// TODO czy mozna sensownie ujednolicic wysylanie, aby to tez mozna bylo dac do funkcji `msg_send`?
-// TODO Posprzątać
-void handle_hello(const struct sockaddr_in *peer_address) {
-    SendInfo info;
-    send_hello_reply(peer_address, &info);
+void join_network(const ProgramArgs *args) {
+    if (!args->_ar_provided) return;
 
-    if (!info.known) {
-        establish_connection(peer_address);
+    struct sockaddr_in peer_address;
+    nutil_set_address(args->peer_address, htons(args->peer_port), &peer_address);
+    // struct sockaddr_in peer_address = get_peer_address(args.peer_address, args.peer_port);
+    Peer *peers = NULL;
+
+    Peer first;
+    first.peer_address_length = 4 /*FIXME IPV4_ADDR_LEN*/;
+    if (inet_pton(AF_INET, args->peer_address, first.peer_address) != 1) {
+        syserr("inet_pton failed");
     }
-}
+    first.peer_port = htons(args->peer_port);
+    peer_add(&first);
 
-void handle_connect(const struct sockaddr_in *peer_address) {
-    establish_connection(peer_address);
-    send_ack_connect(peer_address);
-}
-
-void handle_ack_connect(const struct sockaddr_in *peer_address) {
-    establish_connection(peer_address);
-}
-
-void handle_sync_start(const struct sockaddr_in *peer_address, const Message *msg) {
-    (void)peer_address;
-    (void)msg;
-    // TODO: Implement this function
-}
-
-void handle_delay_request(const struct sockaddr_in *peer_address, const Message *msg) {
-    (void)peer_address;
-    (void)msg;
-    // TODO: Implement this function
-}
-
-void handle_delay_response(const struct sockaddr_in *peer_address, const Message *msg) {
-    (void)peer_address;
-    (void)msg;
-    // TODO: Implement this function
-}
-
-void handle_leader(const struct sockaddr_in *peer_address, const Message *msg) {
-    (void)peer_address;
-    (void)msg;
-    // TODO: Implement this function
-}
-
-void handle_get_time(const Message *msg) {
-    (void)msg;
-    // TODO: Implement this function
-}
-
-void handle_time(const struct sockaddr_in *peer_address, const Message *msg) {
-    (void)peer_address;
-    (void)msg;
-    // TODO: Implement this function
-}
-
-void handle_message(const struct sockaddr_in *peer_address, const ssize_t recv_len) {
-    Message *msg = msg_load(g_buf); // Interpret data as a Message structure.
-    log_received_message(peer_address, msg, recv_len);
-    
-    if (!msg_allows_unknown_sender(msg) &&
-        peer_find(peer_address) == NULL) {
-        syserr("Nie znom jo tego chłopa."); // NOTE nie powinno się wywalać, lecz chyba coś powinno wypisywać
-    }
-
-    // Można napisać coś o tym, czemu nie rozważamy MSG_HELLO_REPLY.
-    // FIXME Jednak trzeba tu uwzględnić MSG_HELLO_REPLY, bo co jeśli węzeł ponownie dołącza do sieci i jakiś koleżka wyśle mu np SYNC_START?
-    switch (msg->message) {
-        case MSG_HELLO:
-            handle_hello(peer_address);
-            break;
-
-        case MSG_CONNECT:
-            handle_connect(peer_address);
-            break;
-
-        case MSG_ACK_CONNECT:
-            handle_ack_connect(peer_address);
-            break;
-
-        case MSG_SYNC_START:
-            handle_sync_start(peer_address, msg);
-            break;
-
-        case MSG_DELAY_REQUEST:
-            handle_delay_request(peer_address, msg);
-            break;
-
-        case MSG_DELAY_RESPONSE:
-            handle_delay_response(peer_address, msg);
-            break;
-
-        case MSG_LEADER:
-            handle_leader(peer_address, msg);
-            break;
-
-        case MSG_GET_TIME:
-            handle_get_time(msg);
-            break;
-
-        case MSG_TIME:
-            handle_time(peer_address, msg);
-            break;
-
-        default:
-            fprintf(stderr, "Unknown message type: %u\n", msg->message);
-            break;
-    }
+    send_hello(&peer_address);
 }
 
 void listen_for_messages() {
     struct sockaddr_in peer_address;
 
-    // TODO czy nie powinniśmy poświęcać większej uwagi addr_len po recvfrom?
     while (true) {
         ssize_t recv_len = receive_message(&peer_address);
         handle_message(&peer_address, recv_len);
     }
-}
-
-void join_network(ProgramArgs args) {
-    if (!args._ar_provided) return;
-
-    struct sockaddr_in peer_address;
-    cmn_set_address(args.peer_address, htons(args.peer_port), &peer_address);
-    // struct sockaddr_in peer_address = get_peer_address(args.peer_address, args.peer_port);
-    Peer *peers = NULL;
-
-    Peer first;
-    first.peer_address_length = IPV4_ADDR_LEN;
-    if (inet_pton(AF_INET, args.peer_address, first.peer_address) != 1) {
-        syserr("inet_pton failed");
-    }
-    first.peer_port = htons(args.peer_port);
-    peer_add(&first);
-
-    send_hello(&peer_address);
-    uint16_t count = receive_and_handle_hello_reply(&peer_address, &peers);
-
-    for (uint16_t i = 0; i < count; ++i) {
-        _connect(&peers[i]);
-    }
-    free(peers);
 }
 
 int main(int argc, char* argv[]) {
@@ -460,9 +260,9 @@ int main(int argc, char* argv[]) {
     args_validate(&program_args);
 
     struct sockaddr_in bind_address; // To avoid allocation on the stack.
-    cmn_init_socket(&g_socket_fd, &bind_address, program_args.bind_address, program_args.port);
+    nutil_init_socket(&g_socket_fd, &bind_address, program_args.bind_address, program_args.port);
     
-    join_network(program_args);
+    join_network(&program_args);
     listen_for_messages();
     
     cmn_close_socket(g_socket_fd);

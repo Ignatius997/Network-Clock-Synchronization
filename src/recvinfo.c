@@ -49,8 +49,8 @@ __attribute__((constructor)) static void _initialize_recv_info(void) {
 // NOTE To jest trochę shady i jakbyśmy chcieli coś więcej z tym robić, to trzeba by miec w ReceiveInfo pole type/message.
 // NOTE Ale na razie jest ok, jako że nigdzie indziej niż w rinfo_load nie potrzebujemy rozmiaru.
 // TODO A co tam zróbmy to pole.
-static size_t _size(const Message *msg) {
-    return recv_info[msg->message];
+static size_t rinfo_size(const ReceiveInfo *msg) {
+    return recv_info;
 }
 
 ReceiveInfo *rinfo_load(const struct sockaddr_in *peer_address, const uint8_t *buf, const ssize_t recv_len) {

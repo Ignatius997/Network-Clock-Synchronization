@@ -10,6 +10,7 @@
 // TODO czy robić to z atrybutem packed? Sprawdzić rozmiar bez i z
 
 typedef struct {
+    uint8_t type;
     struct sockaddr_in peer_address;
 } ReceiveInfo;
 

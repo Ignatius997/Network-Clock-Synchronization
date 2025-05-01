@@ -1,4 +1,5 @@
 ---- OTWARTE ----
+TODO Zobaczyć ostatni log: Aktualnie dwa razy ładujemy dane. Zwalidujmy wszystko dopiero po zaladowaniu do ReceiveInfo
 TODO get_peer_address: rozbicie na peer_extract_address i cmn_set_address
 0. Biblioteki już teraz
 0. Dac Msginfo i Sendinfo do oddzielnych bibliotek, jak ReceiveInfo

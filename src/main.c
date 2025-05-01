@@ -188,7 +188,7 @@ ssize_t receive_message(struct sockaddr_in *peer_address) {
     socklen_t addr_len = (socklen_t) sizeof(*peer_address);
     ssize_t recv_len = recvfrom(g_socket_fd, g_buf, sizeof(g_buf), 0,
                                 (struct sockaddr *) peer_address, &addr_len);
-    int val = nutil_validate_received_data(peer_address, g_buf,recv_len);
+    int val = nutil_validate_received_data(peer_address, g_buf, recv_len);
     (void)val; // NOTE nieużyta zmienna
 
     return recv_len;

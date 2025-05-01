@@ -39,7 +39,12 @@ TODO get_peer_address: rozbicie na peer_extract_address i cmn_set_address
 9. Sprawdzić wszystkie inet_*, w szczególności inet_pton i konwertowanie tych adresów do różnych form
 10. W sumie to te makra można zamienić na enum.
 11. Spoofing
-12. Niech kompiluje się tylko to, co ma się kompilować (bazując na zmianach w plikach?)
+12. Zoptymalizować msg_load i rinfo_load, żeby nie alokować pamięci, skoro i tak tylko kopiujemy rzeczy w istniejącej
+    już pamięci.
+13. Możnaby podzielić receiveinfo na takie klasy:
+    - basic: tylko base [hello],
+    - message-y: base i message [sync-start],
+    - rozbudowane: base i message (jako po prostu pole base) i coś jeszcze [hello-reply].
 
 Komentowanie
 Wspomnieć, że niektóre ify są dla "extensibility".

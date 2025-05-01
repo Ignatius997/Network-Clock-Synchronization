@@ -9,6 +9,7 @@
         "stdio.h": "c",
         "common.h": "c",
         "inttypes.h": "c",
-        "inet.h": "c"
+        "inet.h": "c",
+        "peer.h": "c"
     }
 }

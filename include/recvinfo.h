@@ -7,59 +7,56 @@
 #include "message.h"
 #include "peer.h"
 
-// TODO czy robić to z atrybutem packed? Sprawdzić rozmiar bez i z
+// Packed ze względu na proste ladowanie rinfo w _specified_load
+// Żeby specified load działał fajnie,
 
-typedef struct {
-    uint8_t type;
-    struct sockaddr_in peer_address;
+typedef struct __attribute__((__packed__)) {
+    uint8_t message; // NOTE raczej tylko type, nie cały message
+    struct sockaddr_in peer_address; // Wartosci w tym trzymane sa w porzadku sieciowym
 } ReceiveInfo;
 
-typedef struct {
+typedef struct __attribute__((__packed__)) {
     ReceiveInfo base;
 } HelloReceiveInfo;
 
-typedef struct {
+typedef struct __attribute__((__packed__)) {
     ReceiveInfo       base;
     HelloReplyMessage msg;
     Peer              *peers;
 } HelloReplyReceiveInfo;
 
-typedef struct {
+typedef struct __attribute__((__packed__)) {
     ReceiveInfo    base;
-    ConnectMessage msg; // Wiadomość bazowa
 } ConnectReceiveInfo;
 
-typedef struct {
+typedef struct __attribute__((__packed__)) {
     ReceiveInfo       base;
-    AckConnectMessage msg; // Wiadomość bazowa
 } AckConnectReceiveInfo;
 
-typedef struct {
+typedef struct __attribute__((__packed__)) {
     ReceiveInfo      base;
     SyncStartMessage msg; // Wiadomość bazowa
 } SyncStartReceiveInfo;
 
-typedef struct {
+typedef struct __attribute__((__packed__)) {
     ReceiveInfo         base;
-    DelayRequestMessage msg; // Wiadomość bazowa
 } DelayRequestReceiveInfo;
 
-typedef struct {
+typedef struct __attribute__((__packed__)) {
     ReceiveInfo          base;
     DelayResponseMessage msg; // Wiadomość bazowa
 } DelayResponseReceiveInfo;
 
-typedef struct {
+typedef struct __attribute__((__packed__)) {
     ReceiveInfo   base;
     LeaderMessage msg; // Wiadomość bazowa
 } LeaderReceiveInfo;
 
-typedef struct {
+typedef struct __attribute__((__packed__)) {
     ReceiveInfo    base;
-    GetTimeMessage msg; // Wiadomość bazowa
 } GetTimeReceiveInfo;
 
-typedef struct {
+typedef struct __attribute__((__packed__)) {
     ReceiveInfo base;
     TimeMessage msg; // Wiadomość bazowa
 } TimeReceiveInfo;

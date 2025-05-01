@@ -92,7 +92,13 @@ static void _send_message(SendInfo *sinfo, const Message *msg) {
 //     return send_len;
 // }
 
-/** Sinfo should already have `peer_address` and `buf` fields set before the function. */
+// NOTE IMPORTANT BELOW
+/**
+ * Sinfo should already have all fields (except known (which is only return-field)
+ * and len if it is not meant to be -1) set before the function.
+ * Field `buf` ofc has no meaning when `len` field is -1.
+*/
+
 void nsend_hello(SendInfo *sinfo) {
     HelloMessage msg = {
         .base.message = MSG_HELLO
@@ -103,28 +109,21 @@ void nsend_hello(SendInfo *sinfo) {
     _send_message(sinfo, (Message *)&msg);
 }
 
-
-ssize_t nsend_hello(const struct sockaddr_in *peer_address, uint8_t *buf) {
-    HelloMessage msg = {
-        .base.message = MSG_HELLO
-    };
-
-    return _send_message(peer_address, buf, (Message *)&msg, -1);
-}
-
-void nsend_hello_reply(const struct sockaddr_in *peer_address, SendInfo *sinfo) {
-    Peer *p = peer_find(peer_address);
+void nsend_hello_reply(SendInfo *sinfo) {
+    Peer *p = peer_find(sinfo->peer_address);
     sinfo->known = p != NULL;
     ssize_t pind = sinfo->known ? peer_index(p) : -1;
-
+    
     HelloReplyMessage msg = {
         .base.message = MSG_HELLO_REPLY,
-        .count        = sinfo->known ? htons(peer_get_count()-1) : htons(peer_get_count()),
+        .count        = sinfo->known ? htons(peer_get_count(p)-1) : htons(peer_get_count(p)),
     };
 
-    size_t full_len = msg_size((Message *)&msg) + ntohs(msg.count) * sizeof(Peer);
-    _prepare_buffer_for_sending((Message *)&msg, pind);
-    sinfo->send_len = send_message(peer_address, (Message *)&msg, full_len);
+    sinfo->len = msg_size((Message *)&msg) + ntohs(msg.count) * sizeof(Peer);
+
+    _prepare_buffer_for_sending(sinfo->buf, (Message *)&msg, pind);
+    sinfo->len = _send_message(sinfo, (Message *)&msg);
+    // sinfo->send_len = send_message(peer_address, (Message *)&msg, full_len);
 }
 
 ssize_t nsend_connect(struct sockaddr_in *peer_address) {

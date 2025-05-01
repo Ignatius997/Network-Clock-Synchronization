@@ -13,8 +13,11 @@
 #include "../include/err.h" // FIXME Później do wywałki
 
 static void _hello(const HelloReceiveInfo *h_rinfo) {
-    SendInfo sinfo;
-    nsend_hello_reply(&h_rinfo->base.peer_address, &sinfo);
+    SendInfo sinfo = {
+        .peer_address = h_rinfo->base.peer_address,
+        .buf = buf,
+    };
+    nsend_hello_reply(&sinfo);
 
     if (!sinfo.known) {
         nutil_establish_connection(&h_rinfo->base.peer_address);

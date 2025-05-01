@@ -62,7 +62,13 @@ void join_network(const ProgramArgs *args) {
     first.peer_port = htons(args->peer_port);
     peer_add(&first);
 
-    nsend_hello(&peer_address);
+    // FIXME No to jest tragedia, że trzeba recznie ustawiać sinfo. Ale cóż ...
+    SendInfo sinfo = {
+        .buf = g_buf,
+        .len = -1,
+        .peer_address = peer_address,
+    };
+    nsend_hello(&sinfo);
 }
 
 void listen_for_messages() {
@@ -85,7 +91,7 @@ int main(int argc, char* argv[]) {
 
     struct sockaddr_in bind_address; // To avoid allocation on the stack.
     nutil_init_socket(&g_socket_fd, &bind_address, program_args.bind_address, program_args.port);
-    nsend_set_socket_fd(g_socket_fd);
+    nsend_set_socket_fd(g_socket_fd); // XD, ta linijka właśnie pokazuje, jak głupi jest static socket_fd
     
     join_network(&program_args);
     listen_for_messages();

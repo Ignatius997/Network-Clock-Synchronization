@@ -8,6 +8,7 @@ BUILD_DIR = build
 
 # Kompilator i flagi
 CC = gcc
+RELEASE = -DNDEBUG
 CFLAGS = -I$(INCLUDE_DIR) -Wall -Wextra
 LDFLAGS = 
 

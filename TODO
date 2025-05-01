@@ -1,6 +1,7 @@
 ---- OTWARTE ----
-TODO Zobaczyć ostatni log: Aktualnie dwa razy ładujemy dane. Zwalidujmy wszystko dopiero po zaladowaniu do ReceiveInfo
-TODO get_peer_address: rozbicie na peer_extract_address i cmn_set_address
+TODO SendInfo i ujednolicenie wysyłania
+TODO Lepsze nazwy ReceiveInfo: rinfo
+TODO Można zapisać wskaźnik do bufora danych w bibliotekach. Nawet lepiej: zrobić go totalnie globalnym
 0. Biblioteki już teraz
 0. Dac Msginfo i Sendinfo do oddzielnych bibliotek, jak ReceiveInfo
 0. Odbieranie Hello reply w switch case
@@ -46,6 +47,8 @@ TODO get_peer_address: rozbicie na peer_extract_address i cmn_set_address
     - basic: tylko base [hello],
     - message-y: base i message [sync-start],
     - rozbudowane: base i message (jako po prostu pole base) i coś jeszcze [hello-reply].
+14. Aktualnie dwa razy przetwarzamy dane z bufora po recvfrom dane. Zwalidujmy i zapiszmy gdzies dane od razu przy
+    walidacji (komplikacja zależności bibliotek)
 
 Komentowanie
 Wspomnieć, że niektóre ify są dla "extensibility".

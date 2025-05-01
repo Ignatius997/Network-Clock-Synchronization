@@ -10,6 +10,8 @@
         "common.h": "c",
         "inttypes.h": "c",
         "inet.h": "c",
-        "peer.h": "c"
+        "peer.h": "c",
+        "message.h": "c",
+        "netutil.h": "c"
     }
 }

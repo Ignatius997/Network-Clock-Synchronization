@@ -10,58 +10,58 @@
 // Packed ze względu na proste ladowanie rinfo w _specified_load
 // Żeby specified load działał fajnie,
 
-typedef struct __attribute__((__packed__)) {
+typedef struct {
     uint8_t message; // NOTE raczej tylko type, nie cały message
     struct sockaddr_in peer_address; // Wartosci w tym trzymane sa w porzadku sieciowym
 } ReceiveInfo;
 
-typedef struct __attribute__((__packed__)) {
+typedef struct {
     ReceiveInfo base;
 } HelloReceiveInfo;
 
-typedef struct __attribute__((__packed__)) {
+typedef struct {
     ReceiveInfo       base;
     HelloReplyMessage msg;
     Peer              *peers;
 } HelloReplyReceiveInfo;
 
-typedef struct __attribute__((__packed__)) {
+typedef struct {
     ReceiveInfo    base;
 } ConnectReceiveInfo;
 
-typedef struct __attribute__((__packed__)) {
+typedef struct {
     ReceiveInfo       base;
 } AckConnectReceiveInfo;
 
-typedef struct __attribute__((__packed__)) {
+typedef struct {
     ReceiveInfo      base;
     SyncStartMessage msg; // Wiadomość bazowa
 } SyncStartReceiveInfo;
 
-typedef struct __attribute__((__packed__)) {
+typedef struct {
     ReceiveInfo         base;
 } DelayRequestReceiveInfo;
 
-typedef struct __attribute__((__packed__)) {
+typedef struct {
     ReceiveInfo          base;
     DelayResponseMessage msg; // Wiadomość bazowa
 } DelayResponseReceiveInfo;
 
-typedef struct __attribute__((__packed__)) {
+typedef struct {
     ReceiveInfo   base;
     LeaderMessage msg; // Wiadomość bazowa
 } LeaderReceiveInfo;
 
-typedef struct __attribute__((__packed__)) {
+typedef struct {
     ReceiveInfo    base;
 } GetTimeReceiveInfo;
 
-typedef struct __attribute__((__packed__)) {
+typedef struct  {
     ReceiveInfo base;
     TimeMessage msg; // Wiadomość bazowa
 } TimeReceiveInfo;
 
 size_t       rinfo_size(const ReceiveInfo *info);
-ReceiveInfo *rinfo_load(const struct sockaddr_in *peer_address, const uint8_t *buf, const ssize_t recv_len);
+ReceiveInfo *rinfo_load(const struct sockaddr_in *peer_address, const Message *msg, const uint8_t *buf);
 
 #endif // RECVINFO_H

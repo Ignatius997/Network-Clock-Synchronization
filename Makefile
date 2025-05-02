@@ -23,7 +23,6 @@ all: $(TARGET)
 $(TARGET): $(OBJS)
 	@mkdir -p $(BUILD_DIR)
 	$(CC) $(OBJS) $(LDFLAGS) -o $@
-	# @rm -f $(OBJS)
 
 # Kompilacja plików .c do obiektów .o
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c

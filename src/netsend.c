@@ -7,8 +7,7 @@
 #include "../include/peer.h"
 #include "../include/loglib.h"
 #include "../include/err.h"
-
-// TODO Usystematyzować wysyłanie
+#include "../include/globals.h"
 
 static int socket_fd;
 
@@ -16,16 +15,14 @@ void nsend_set_socket_fd(const int sockfd) {
     socket_fd = sockfd;
 }
 
-// NOTE za długa nazwa
-// NOTE można by to uogólnić, jednak w sumie jakiekolwiek uogólnienie to po prostu memcpy :)
 // peer_index to indeks typa, ktorego nie przesyłamy
-static void _prepare_buffer_for_sending(uint8_t *buf, const Message *msg, const ssize_t peer_index) {
-    memcpy(buf, msg, msg_size(msg)); // Load message to buffer.
+static void _prepare_buffer_for_sending(const Message *msg, const ssize_t peer_index) {
+    memcpy(ncs_buf, msg, msg_size(msg)); // Load message to buffer.
     
     if (msg->message == MSG_HELLO_REPLY) {
         size_t full_len = ntohs(((HelloReplyMessage *)msg)->count) * sizeof(Peer);
         void *src1  = peer_get_all();
-        void *dest1 = buf + msg_size(msg);
+        void *dest1 = ncs_buf + msg_size(msg);
 
         // Load peers to buffer
         if (peer_index == -1) {
@@ -41,56 +38,27 @@ static void _prepare_buffer_for_sending(uint8_t *buf, const Message *msg, const 
             memcpy(dest2, src2, len2);
         }
             
-        log_sending_peers(msg, buf);
+        log_sending_peers(msg);
     }
 }
 
 /**
- * Jeśli nie bierzemy z g_buf: sinfo->len=-1
- * Jeśli bierzemy z g_buf, to msg nie ma znaczenia
+ * Jeśli nie bierzemy z ncs_buf: sinfo->len=-1
+ * Jeśli bierzemy z ncs_buf, to msg nie ma znaczenia
  */
 static void _send_message(SendInfo *sinfo, const Message *msg) {
-    void *buf  = sinfo->len < 0 ? msg : sinfo->buf;
-    size_t len = sinfo->len < 0 ? msg_size(msg) : sinfo->len;
+    void *buf  = sinfo->len < 0 ? (void *)msg : (void *)ncs_buf;
+    size_t len = sinfo->len < 0 ? msg_size(msg) : (size_t) sinfo->len;
     socklen_t addr_len = (socklen_t) sizeof(sinfo->peer_address);
     
-    sinfo->len = sendto(socket_fd, buf, len, 0, sinfo->peer_address, addr_len);
+    sinfo->len = sendto(socket_fd, buf, len, 0,
+                        (struct sockaddr *) &sinfo->peer_address, addr_len);
+    if (sinfo->len < 0) {
+        syserr("sendto"); // NOTE ofc nie powinno się wywalać
+    } else {
+        log_sent_message(&sinfo->peer_address, msg, sinfo->len);
+    }
 }
-
-// static ssize_t _sendto_wrap(const struct sockaddr_in *peer_address, const uint8_t *buf,
-//                     const Message *msg, const ssize_t len) {
-//     socklen_t addr_len = (socklen_t) sizeof(*peer_address);
-//     ssize_t send_len;
-
-//     if (len < 0) {
-//         send_len = sendto(socket_fd, msg, msg_size(msg), 0,
-//             (struct sockaddr *) peer_address, addr_len);
-//     } else {
-//         send_len = sendto(socket_fd, buf, len, 0,
-//             (struct sockaddr *) peer_address, addr_len);
-//     }
-
-//     if (send_len < 0) syserr("sendto fail"); // NOTE (chyba) Nie powinno się wywalać
-//     return send_len;
-// }
-
-// TODO widać powtarzający się schemat, można to ujednolicić
-
-/**
- * Jeśli nie bierzemy z g_buf: sinfo->len=-1
- */
-
-// static ssize_t _send_message(const struct sockaddr_in *peer_address, const uint8_t *buf,
-//                             const Message *msg, ssize_t len) {
-//     if (len < 0) {
-        
-//     }
-
-//     ssize_t send_len = sendto_wrap(peer_address, buf, msg, len);
-//     if (send_len > 0 ) log_sent_message(peer_address, msg, send_len);
-
-//     return send_len;
-// }
 
 // NOTE IMPORTANT BELOW
 /**
@@ -100,9 +68,7 @@ static void _send_message(SendInfo *sinfo, const Message *msg) {
 */
 
 void nsend_hello(SendInfo *sinfo) {
-    HelloMessage msg = {
-        .base.message = MSG_HELLO
-    };
+    HelloMessage msg = {.base.message = MSG_HELLO};
 
     sinfo->len = -1; // To nawet chyba lepiej zrobić wcześniej
 
@@ -110,34 +76,29 @@ void nsend_hello(SendInfo *sinfo) {
 }
 
 void nsend_hello_reply(SendInfo *sinfo) {
-    Peer *p = peer_find(sinfo->peer_address);
+    Peer *p = peer_find(&sinfo->peer_address);
     sinfo->known = p != NULL;
     ssize_t pind = sinfo->known ? peer_index(p) : -1;
     
     HelloReplyMessage msg = {
         .base.message = MSG_HELLO_REPLY,
-        .count        = sinfo->known ? htons(peer_get_count(p)-1) : htons(peer_get_count(p)),
+        .count        = sinfo->known ? htons(peer_get_count()-1) : htons(peer_get_count()),
     };
 
     sinfo->len = msg_size((Message *)&msg) + ntohs(msg.count) * sizeof(Peer);
 
-    _prepare_buffer_for_sending(sinfo->buf, (Message *)&msg, pind);
-    sinfo->len = _send_message(sinfo, (Message *)&msg);
-    // sinfo->send_len = send_message(peer_address, (Message *)&msg, full_len);
+    _prepare_buffer_for_sending((Message *)&msg, pind);
+    _send_message(sinfo, (Message *)&msg);
 }
 
-ssize_t nsend_connect(struct sockaddr_in *peer_address) {
-    ConnectMessage msg = {
-        .base.message = MSG_CONNECT
-    };
+void nsend_connect(SendInfo *sinfo) {
+    ConnectMessage msg = {.base.message = MSG_CONNECT};
 
-    return send_message(peer_address, (Message *)&msg, -1);
+    _send_message(sinfo, (Message *)&msg);
 }
 
-ssize_t nsend_ack_connect(const struct sockaddr_in *peer_address) {
-    AckConnectMessage msg = {
-        .base.message = MSG_ACK_CONNECT
-    };
+void nsend_ack_connect(SendInfo *sinfo) {
+    AckConnectMessage msg = {.base.message = MSG_ACK_CONNECT};
 
-    return send_message(peer_address, (Message *)&msg, -1);
+    _send_message(sinfo, (Message *)&msg);
 }

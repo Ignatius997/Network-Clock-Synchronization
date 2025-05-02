@@ -3,7 +3,6 @@
 #include <stdlib.h>
 
 #include "../include/nethandle.h"
-#include "../include/netrecv.h"
 #include "../include/netsend.h"
 #include "../include/netutil.h"
 #include "../include/recvinfo.h"
@@ -15,7 +14,6 @@
 static void _hello(const HelloReceiveInfo *h_rinfo) {
     SendInfo sinfo = {
         .peer_address = h_rinfo->base.peer_address,
-        .buf = buf,
     };
     nsend_hello_reply(&sinfo);
 
@@ -30,7 +28,7 @@ static void _hello_reply(const HelloReplyReceiveInfo *hr_rinfo) {
     if (peers_count > 0) {
         Peer *peers = malloc(peers_count * sizeof(Peer));
         if (peers == NULL) syserr("malloc failed");
-        memcpy(peers, info->peers, peers_count * sizeof(Peer));
+        memcpy(peers, hr_rinfo->peers, peers_count * sizeof(Peer));
 
         // FIXME Dać to gdzieś indziej, zrobić to sprytniej.
         fprintf(stderr, "Peers from HELLO_REPLY:\n");
@@ -38,9 +36,9 @@ static void _hello_reply(const HelloReplyReceiveInfo *hr_rinfo) {
 
         // Send connect messages.
         for (uint16_t i = 0; i < peers_count; ++i) {
-            struct sockaddr_in addr;
-            nutil_extract_address(&peers[i], &addr);
-            nsend_connect(&addr);
+            SendInfo sinfo = {.len = -1};
+            nutil_extract_address(&peers[i], &sinfo.peer_address);
+            nsend_connect(&sinfo);
         }
 
         free(peers);
@@ -49,7 +47,12 @@ static void _hello_reply(const HelloReplyReceiveInfo *hr_rinfo) {
 
 static void _connect(const ConnectReceiveInfo *info) {
     nutil_establish_connection(&info->base.peer_address);
-    nsend_ack_connect(&info->base.peer_address);
+
+    SendInfo sinfo = {
+        .peer_address = info->base.peer_address,
+        .len = -1,
+    };
+    nsend_ack_connect(&sinfo);
 }
 
 static void _ack_connect(const AckConnectReceiveInfo *info) {
@@ -86,15 +89,15 @@ static void _time(const TimeReceiveInfo *info) {
     // TODO: Implement this function
 }
 
-void nhandle_message(const struct sockaddr_in *peer_address, const uint8_t *buf, const ssize_t recv_len) {
-    Message *msg = msg_load(buf); // Interpret data as a Message structure.
+void nhandle_message(const struct sockaddr_in *peer_address, const ssize_t recv_len) {
+    Message *msg = msg_load(); // Interpret data as a Message structure.
     
     if (!msg_allows_unknown_sender(msg) &&
         peer_find(peer_address) == NULL) {
         syserr("Nie znom jo tego chłopa."); // NOTE nie powinno się wywalać, lecz chyba coś powinno wypisywać
     }
 
-    ReceiveInfo *info = rinfo_load(peer_address, msg, buf);
+    ReceiveInfo *info = rinfo_load(peer_address, msg);
     log_received_message(peer_address, msg, recv_len);
 
     switch (msg->message) {

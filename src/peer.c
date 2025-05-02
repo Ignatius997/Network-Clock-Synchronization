@@ -77,8 +77,8 @@ void peer_print(const Peer *p) {
     fprintf(stderr, "  Port: %u\n", ntohs(p->peer_port));
 }
 
-void peer_all_print(const Peer *peers, size_t size) {
-    for (size_t i = 0; i < size; ++i) {
+void peer_all_print(const Peer *peers) {
+    for (size_t i = 0; i < peer_manager.count; ++i) {
         peer_print(&peers[i]);
     }
     fprintf(stderr, "\n");

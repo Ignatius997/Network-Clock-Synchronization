@@ -7,7 +7,8 @@
 #include "../include/recvinfo.h"
 #include "../include/message.h"
 #include "../include/peer.h"
-#include "../err.h"
+#include "../include/globals.h"
+#include "../include/err.h"
 
 // Tablica przechowująca informacje o ReceiveInfo dla każdego typu wiadomości
 static size_t recv_info_size[MSG_MAX + 1];
@@ -32,35 +33,28 @@ __attribute__((constructor)) static void _initialize_recv_info(void) {
     _set_recv_info_size();
 }
 
-// NOTE To jest trochę shady i jakbyśmy chcieli coś więcej z tym robić, to trzeba by miec w ReceiveInfo pole type/message.
-// NOTE Ale na razie jest ok, jako że nigdzie indziej niż w rinfo_load nie potrzebujemy rozmiaru.
-// TODO A co tam zróbmy to pole.
-static size_t rinfo_size(const ReceiveInfo *info) {
-    return recv_info_size[info->type];
-}
-
-static void _load_hello_reply(HelloReplyReceiveInfo *info, const uint8_t *buf) {
+static void _load_hello_reply(HelloReplyReceiveInfo *info) {
     uint16_t peers_count = ntohs(info->msg.count);
 
     if (peers_count > 0) {
         info->peers = malloc(peers_count * sizeof(Peer));
         if (info->peers == NULL) syserr("malloc failed");
-        memcpy(info->peers, buf + msg_size(&info->msg), peers_count * sizeof(Peer));
+        memcpy(info->peers, ncs_buf + msg_size((Message *)&info->msg), peers_count * sizeof(Peer));
 
         fprintf(stderr, "Peers from HELLO_REPLY:\n");
         for (size_t i = 0; i < peers_count; ++i) {
-            peer_print(&peers[i]);
+            peer_print(&info->peers[i]);
         }
         fprintf(stderr, "\n");
     }
 }
 
-static void _basic_load(ReceiveInfo *info, const struct sockaddr_info *peer_address, const Message *msg) {
+static void _basic_load(ReceiveInfo *info, const struct sockaddr_in *peer_address, const Message *msg) {
     info->message = msg->message;
-    memcpy(&info->peer_address, peer_address, sizeof(peer_address));
+    info->peer_address = *peer_address;
 }
 
-static void _specified_load(ReceiveInfo *info, const Message *msg, const uint8_t *buf) {
+static void _specified_load(ReceiveInfo *info, const Message *msg) {
     switch (info->message) {
         /** Cases of MSG_HELLO and others are not included, because
          * size of e.g. HelloReceiveInfo is equal to ReceiveInfo size.
@@ -69,7 +63,7 @@ static void _specified_load(ReceiveInfo *info, const Message *msg, const uint8_t
         case MSG_HELLO_REPLY:
             HelloReplyReceiveInfo *hello_reply_info = (HelloReplyReceiveInfo *)info;
             memcpy(&hello_reply_info->msg, msg, msg_size(msg));
-            _load_hello_reply(hello_reply_info, buf);
+            _load_hello_reply(hello_reply_info);
             break;
 
         case MSG_SYNC_START:
@@ -97,7 +91,11 @@ static void _specified_load(ReceiveInfo *info, const Message *msg, const uint8_t
     }
 }
 
-ReceiveInfo *rinfo_load(const struct sockaddr_in *peer_address, const Message *msg, const uint8_t *buf) {
+size_t rinfo_size(const ReceiveInfo *info) {
+    return recv_info_size[info->message];
+}
+
+ReceiveInfo *rinfo_load(const struct sockaddr_in *peer_address, const Message *msg) {
     ReceiveInfo *info = malloc(sizeof(ReceiveInfo));
     if (info == NULL) syserr("malloc nrecv_info_load");
 
@@ -111,7 +109,7 @@ ReceiveInfo *rinfo_load(const struct sockaddr_in *peer_address, const Message *m
         }
 
         info = tmp_info;
-        _specified_load(info, msg, buf);
+        _specified_load(info, msg);
     }
 
     return info;

@@ -62,6 +62,6 @@ typedef struct  {
 } TimeReceiveInfo;
 
 size_t       rinfo_size(const ReceiveInfo *info);
-ReceiveInfo *rinfo_load(const struct sockaddr_in *peer_address, const Message *msg, const uint8_t *buf);
+ReceiveInfo *rinfo_load(const struct sockaddr_in *peer_address, const Message *msg);
 
 #endif // RECVINFO_H

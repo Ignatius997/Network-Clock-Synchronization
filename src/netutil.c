@@ -13,6 +13,7 @@
 #include "../include/netutil.h"
 #include "../include/message.h"
 #include "../include/peer.h"
+#include "../include/globals.h"
 #include "../include/err.h"
 
 void cmn_close_socket(const int sockfd) {
@@ -59,9 +60,9 @@ static void _validate_address(const struct sockaddr_in *addr) {
     // TODO Maybe return sth?
 }
 
-static int _validate_received_length(const ssize_t recv_len, const uint8_t *buf) {
+static int _validate_received_length(const ssize_t recv_len) {
     // NOTE Program nie powinien się wywalać przy jednym złym receive, ale początkowo tak zróbmy dla świętego spokoju i debugowania
-    Message *msg = (Message *)buf;
+    Message *msg = (Message *)ncs_buf;
 
     if (recv_len < 0) {
         syserr("recvfrom failed");
@@ -81,9 +82,9 @@ int _validate_peer(const Peer *p) {
     return 0;
 }
 
-/** Function does not assume, that there are any peers to validate in `buf`. */
-int _validate_peers(const uint8_t *buf) {
-    Message *msg = (Message *)buf;
+/** Function does not assume, that there are any peers to validate in `ncs_buf`. */
+int _validate_peers() {
+    Message *msg = (Message *)ncs_buf;
 
     if (msg->message == MSG_HELLO_REPLY) {
         uint16_t peers_count = ntohs(((HelloReplyMessage *)msg)->count);
@@ -93,7 +94,7 @@ int _validate_peers(const uint8_t *buf) {
             
             fprintf(stderr, "Validating peers:\n");
             for (size_t i = 0; i < peers_count; ++i) {
-                Peer *p = (Peer *) (buf + offset);
+                Peer *p = (Peer *) (ncs_buf + offset);
                 _validate_peer(p);
                 offset += sizeof(Peer);
             }
@@ -147,8 +148,6 @@ void nutil_init_socket(int *sockfd, struct sockaddr_in *bind_address,
         cmn_close_socket(*sockfd);
         syserr("bind");
     }
-
-    fprintf(stderr, "Listening on port %" PRIu16 "\n", port);
 }
 
 void nutil_extract_address(const Peer *p, struct sockaddr_in *addr) {
@@ -177,10 +176,10 @@ void nutil_establish_connection(const struct sockaddr_in *peer_address) {
 }
 
 int nutil_validate_received_data(const struct sockaddr_in *peer_address,
-                                 const uint8_t *buf, const ssize_t recv_len) {
-    int ret = _validate_received_length(recv_len, buf);
+                                 const ssize_t recv_len) {
+    int ret = _validate_received_length(recv_len);
     _validate_address(peer_address); // FIXME komiczne, tutaj już nie ustawiamy niczego
-    _validate_peers(buf);
+    _validate_peers();
     return ret; // NOTE Potem, gdy nie będziemy rzucali syserr w przypadku recv_len < msg_size, będziemy mogli jakoś to lepiej obsłużyc
 }
 

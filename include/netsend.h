@@ -7,11 +7,11 @@
 #include "../include/message.h"
 
 /** Information about send operation. Packed to save memory. */
-typedef struct __attribute__((__packed__)) {
+typedef struct {
     struct sockaddr_in peer_address;
-    uint8_t *buf;
     ssize_t len; // wejscie i wyjscie
-    bool    known; // Used in sending hello-reply message // NOTE zmienić nazwę
+    bool    known; // Used in sending hello-reply message
+    // NOTE Szczerze to pole `known` nie powinno się tu znajdować.
 } SendInfo;
 
 void nsend_set_socket_fd(const int sockfd);

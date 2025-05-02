@@ -7,6 +7,7 @@
 #include <stdlib.h>
 
 #include "../include/message.h"
+#include "../include/globals.h"
 #include "../include/err.h"
 
 static MessageInfo msg_info[MSG_MAX+1];
@@ -44,11 +45,11 @@ __attribute__((constructor)) static void _initialize_msg_info(void) {
     _set_info_allow_unknown_sender();
 }
 
-Message *msg_load(const uint8_t *buf) {
+Message *msg_load() {
     Message *msg = malloc(sizeof(Message));
     if (msg == NULL) syserr("malloc msg_load");
     
-    memcpy(msg, buf, sizeof(Message));
+    memcpy(msg, ncs_buf, sizeof(Message));
     size_t message_size = msg_size(msg);
 
     if (message_size > sizeof(Message)) {
@@ -59,7 +60,7 @@ Message *msg_load(const uint8_t *buf) {
         }
 
         msg = tmp_msg;
-        memcpy((uint8_t *)msg + sizeof(Message), buf + sizeof(Message), message_size - sizeof(Message));
+        memcpy((uint8_t *)msg + sizeof(Message), ncs_buf + sizeof(Message), message_size - sizeof(Message));
     }
 
     return msg;

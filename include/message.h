@@ -78,7 +78,7 @@ typedef struct __attribute__((__packed__)) {
     bool    allow_unknown_sender;
 } MessageInfo;
 
-Message *msg_load(const uint8_t *buf);
+Message *msg_load();
 
 size_t      msg_size(const Message *msg);
 bool        msg_allows_unknown_sender(const Message *msg);

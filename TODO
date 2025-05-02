@@ -1,6 +1,5 @@
 ---- OTWARTE ----
-TODO Lepsze nazwy ReceiveInfo: rinfo
-TODO Globalny socket_fd
+TODO Sprawdzić program valgrindem
 0. Biblioteki już teraz
 0. Dac Msginfo i Sendinfo do oddzielnych bibliotek, jak ReceiveInfo
 0. Odbieranie Hello reply w switch case
@@ -42,6 +41,7 @@ TODO Globalny socket_fd
 11. Spoofing
 12. Zoptymalizować msg_load i rinfo_load, żeby nie alokować pamięci, skoro i tak tylko kopiujemy rzeczy w istniejącej
     już pamięci.
+13.0. Być może podzielić msg oraz recvinfo na msg i msg-combinators i recvinfo-combinators jak w asynchronicznym egzekutorze?
 13. Możnaby podzielić receiveinfo na takie klasy:
     - basic: tylko base [hello],
     - message-y: base i message [sync-start],

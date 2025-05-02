@@ -25,9 +25,6 @@
 #include "../include/netsend.h"
 #include "../include/globals.h"
 
-#define IPV4_ADDR_LEN 4
-
-// TODO te całe wysyłanie możnaby jakoś ujednolicić.
 // TODO dodać to cale oczekiwanie od 5 do 10 sekund
 
 // NOTE Użycie ncs_buf pokazuje, że definicja tej funkcji powinna być poza mainem.
@@ -37,9 +34,8 @@ ssize_t receive_message(struct sockaddr_in *peer_address) {
     ssize_t recv_len = recvfrom(ncs_sockfd, ncs_buf, sizeof(ncs_buf), 0,
                                 (struct sockaddr *) peer_address, &addr_len);
     int val = nutil_validate_received_data(peer_address, recv_len);
-    (void)val; // NOTE nieużyta zmienna
 
-    return recv_len;
+    return val != 0 ? recv_len : -1;
 }
 
 void join_network(const ProgramArgs *args) {
@@ -49,14 +45,13 @@ void join_network(const ProgramArgs *args) {
     nutil_set_address(args->peer_address, htons(args->peer_port), &peer_address);
     
     Peer first;
-    first.peer_address_length = 4 /*FIXME IPV4_ADDR_LEN*/;
+    first.peer_address_length = NUTIL_IPV4_ADDR_LEN;
     if (inet_pton(AF_INET, args->peer_address, first.peer_address) != 1) {
         syserr("inet_pton failed");
     }
     first.peer_port = htons(args->peer_port);
     peer_add(&first);
 
-    // FIXME No to jest tragedia, że trzeba recznie ustawiać sinfo. Z drugiej strony to samo sie robi przy udp ...
     SendInfo sinfo = {
         .len = -1,
         .peer_address = peer_address,
@@ -64,11 +59,15 @@ void join_network(const ProgramArgs *args) {
     nsend_hello(&sinfo);
 }
 
-void listen_for_messages() {
+void listen_for_messages(void) {
     struct sockaddr_in peer_address;
 
     while (true) {
         ssize_t recv_len = receive_message(&peer_address);
+        if (recv_len == -1) { // NOTE Dodać makro?
+            // TODO: Implement
+        }
+
         nhandle_message(&peer_address, recv_len);
     }
 }

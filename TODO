@@ -1,7 +1,5 @@
 ---- OTWARTE ----
-0. Dac Msginfo i Sendinfo do oddzielnych bibliotek, jak ReceiveInfo
-0. Odbieranie Hello reply w switch case
-0. VALIDUJ PEERY W HELLO-REPLY
+TODO VALIDUJ PEERY W HELLO-REPLY
 0. Sprawdzić w connect i ack_connect, czy nie znamy już tego węzła.
 0. Reformacja wysyłania: zaaplikować SendInfo
 1.1.1. Co jeśli drugi raz dodajemy ten sam węzeł? (Sprawdzić treść oraz discorda) TO JEST NA DISCORDZIE, ZGLEBIC
@@ -30,6 +28,7 @@
 1.2.5. Skoro (a propos Message) "Wartości w binarnych polach wielooktetowych zapisuje się w porządku sieciowym.", to czy nie mamy/lepiej ich w sumie stale mieć w porządku sieciowym?
 1.2.6. W msg_send (i inncyh funkcjach tego typu) powinniśmy być moze tworzyc kopie msg i konwertowac i przesylac kopię dla swiętego spokoju
 2. Jak nie przekroczyć czasu oczekiwania?
+2,5. Obsługa wywalania się odpowiednich funkcji
 3. Jaki ma być MAX_DATA? Co jeśli nie starczy pamięci?
 5. Zamienić funkcję get_peer_address na taką, która przyjmuje wskaźnik do struct sockaddr_in, a nie zwraca te strukture.
 6. Zamykanie gniazda w przypadku błędu.
@@ -46,6 +45,7 @@
     - rozbudowane: base i message (jako po prostu pole base) i coś jeszcze [hello-reply].
 14. Aktualnie dwa razy przetwarzamy dane z bufora po recvfrom dane. Zwalidujmy i zapiszmy gdzies dane od razu przy
     walidacji (komplikacja zależności bibliotek)
+15. Czy Dac Msginfo i Sendinfo do oddzielnych bibliotek, jak ReceiveInfo?
 
 Komentowanie
 Wspomnieć, że niektóre ify są dla "extensibility".

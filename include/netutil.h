@@ -7,6 +7,8 @@
 #include "message.h"
 #include "peer.h"
 
+#define NUTIL_IPV4_ADDR_LEN 4
+
 void cmn_close_socket(const int sockfd);
 
 void     nutil_set_address(char const *peer_ip_str, const uint16_t port, struct sockaddr_in *addr);

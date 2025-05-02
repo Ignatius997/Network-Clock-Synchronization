@@ -2,7 +2,7 @@
 #define PEER_H
 
 #include <stdint.h>
-#include <netinet/in.h>
+#include <netinet/in.h> // FIXME A nie arpa?
 
 /** Structure representing peer.
  * `peer_port` field is *always* held in network order.

@@ -18,7 +18,7 @@
 
 // ==== Internal helper functions ====
 
-static uint32_t nutil_extract_ip4(const char *addr) {
+static uint32_t _extract_ip4(const char *addr) {
     uint32_t inaddr = addr == NULL ? htonl(INADDR_ANY) : inet_addr(addr);
     if (inaddr == INADDR_NONE && addr != NULL) {
         syserr("Invalid IPv4 address");
@@ -32,25 +32,18 @@ static void _init_addr(struct sockaddr_in *bind_address, const char *addr,
                        const uint16_t port) {
     // Bind the socket to a concrete address
     bind_address->sin_family = AF_INET; // IPv4
-    bind_address->sin_addr.s_addr = nutil_extract_ip4(addr);
+    bind_address->sin_addr.s_addr = _extract_ip4(addr);
     bind_address->sin_port = htons(port);
 }
 
-static void _validate_address(const struct sockaddr_in *addr) {
+static int _validate_address(const struct sockaddr_in *addr) {
+    // NOTE czy powinniśmy to w ogóle walidować?
     if (addr->sin_family != AF_INET) {
-        syserr("Invalid address family");
+        syserr("Invalid address family"); // Nie powinno się wywalać
+        return 1;
     }
 
-    // TODO Should we check it?
-    // if (addr->sin_port == 0) {
-    //     syserr("Port number is zero");
-    // }
-    
-    // if (addr->sin_addr.s_addr == INADDR_NONE) {
-    //     syserr("Invalid IP address");
-    // }
-
-    // TODO Maybe return sth?
+    return 0;
 }
 
 static int _validate_received_length(const ssize_t recv_len) {
@@ -58,25 +51,29 @@ static int _validate_received_length(const ssize_t recv_len) {
     Message *msg = (Message *)ncs_buf;
 
     if (recv_len < 0) {
-        syserr("recvfrom failed");
+        syserr("recvfrom failed"); // NOTE nie powinno się wywalać
+        return -1;
     }
 
     if (recv_len < (ssize_t) msg_size(msg)) {
         syserr("recvfrom less bytes than message size."); // Można dodać rodzaj msg
-        return 1;
+        return -1;
     }
 
-    return 0; // NOTE Na przyszłość (patrz linijka wyżej).
+    return 0;
 }
 
-int _validate_peer(const Peer *p) {
-    // TODO implement
-    (void)p;
+static int _validate_peer(const Peer *p) {
+    if (p->peer_address_length != NUTIL_IPV4_ADDR_LEN) {
+        syserr("Received incorrect peers"); // NOTE ofc nie powinno się wywalać
+        return -1;
+    }
+    
     return 0;
 }
 
 /** Function does not assume, that there are any peers to validate in `ncs_buf`. */
-int _validate_peers() {
+static int _validate_peers() {
     Message *msg = (Message *)ncs_buf;
 
     if (msg->message == MSG_HELLO_REPLY) {
@@ -88,14 +85,14 @@ int _validate_peers() {
             fprintf(stderr, "Validating peers:\n");
             for (size_t i = 0; i < peers_count; ++i) {
                 Peer *p = (Peer *) (ncs_buf + offset);
-                _validate_peer(p);
+                if (_validate_peer(p) != 0) return -1; // Failure
                 offset += sizeof(Peer);
             }
         }
         fprintf(stderr, "\n");
     }
     
-    return 0; // NOTE Success
+    return 0;
 }
 
 // ==== Public library functions ====
@@ -156,13 +153,13 @@ void nutil_extract_address(const Peer *p, struct sockaddr_in *addr) {
 
 // TODO Możnaby to jakoś ujednolicić, żeby dołączający z _ar_provided też mógł użyć takiej funkcji
 void nutil_establish_connection(const struct sockaddr_in *peer_address) {
-    uint8_t ip[16];
+    uint8_t ip[16] = {0};
     memset(ip, 0, sizeof(ip));
     memcpy(ip, &peer_address->sin_addr, 4 /*FIXME IPV4_ADDR_LEN*/);
 
     Peer p;
     p.peer_address_length = 4 /*FIXME IPV4_ADDR_LEN*/;
-    memcpy(p.peer_address, ip, 4 /*FIXME IPV4_ADDR_LEN*/);
+    memcpy(p.peer_address, ip, sizeof(ip) /*FIXME IPV4_ADDR_LEN*/);
     p.peer_port = peer_address->sin_port; // NOTE bez konwertowania
 
     peer_add(&p);
@@ -171,9 +168,10 @@ void nutil_establish_connection(const struct sockaddr_in *peer_address) {
 int nutil_validate_received_data(const struct sockaddr_in *peer_address,
                                  const ssize_t recv_len) {
     int ret = _validate_received_length(recv_len);
-    _validate_address(peer_address); // FIXME komiczne, tutaj już nie ustawiamy niczego
-    _validate_peers();
-    return ret; // NOTE Potem, gdy nie będziemy rzucali syserr w przypadku recv_len < msg_size, będziemy mogli jakoś to lepiej obsłużyc
+    if (ret != 0) ret = _validate_address(peer_address);
+    if (ret != 0) ret = _validate_peers();
+
+    return ret;
 }
 
 /**

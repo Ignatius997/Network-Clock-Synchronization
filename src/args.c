@@ -12,9 +12,9 @@
 ProgramArgs args_default() {
     return (ProgramArgs) {
         .bind_address   = NULL,
-        .port           = DEFAULT_PORT,
+        .port           = ARGS_DEFAULT_PORT,
         .peer_address   = NULL,
-        .peer_port      = DEFAULT_PORT,
+        .peer_port      = ARGS_DEFAULT_PORT,
     
         ._ar_provided           = false,
     };

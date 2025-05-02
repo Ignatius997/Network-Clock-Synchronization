@@ -4,7 +4,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define DEFAULT_PORT 0
+#define ARGS_DEFAULT_PORT 0
 
 #define ARGOPT_BIND_ADDRESS 'b'
 #define ARGOPT_PORT         'p'

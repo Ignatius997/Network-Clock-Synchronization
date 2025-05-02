@@ -11,6 +11,7 @@
 
 // peer_index to indeks typa, ktorego nie przesyłamy
 static void _prepare_buffer_for_sending(const Message *msg, const ssize_t peer_index) {
+    memset(ncs_buf, 0, G_BUF_SIZE);
     memcpy(ncs_buf, msg, msg_size(msg)); // Load message to buffer.
     
     if (msg->message == MSG_HELLO_REPLY) {
@@ -47,6 +48,7 @@ static void _send_message(SendInfo *sinfo, const Message *msg) {
     
     sinfo->len = sendto(ncs_sockfd, buf, len, 0,
                         (struct sockaddr *) &sinfo->peer_address, addr_len);
+
     if (sinfo->len < 0) {
         syserr("sendto"); // NOTE ofc nie powinno się wywalać
     } else {

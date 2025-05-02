@@ -46,6 +46,8 @@ static void _load_hello_reply(HelloReplyReceiveInfo *hr_rinfo) {
             peer_print(&hr_rinfo->peers[i]);
         }
         fprintf(stderr, "\n");
+    } else {
+        hr_rinfo->peers = NULL; // To avoid freeing uninitialised memory in `rinfo_free`.
     }
 }
 

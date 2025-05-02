@@ -13,6 +13,9 @@
 #include <unistd.h>
 #include <signal.h>
 #include <endian.h>
+#include <time.h>
+
+#include <unistd.h>
 
 #include "../include/peer.h"
 #include "../include/netutil.h"
@@ -24,6 +27,7 @@
 #include "../include/nethandle.h"
 #include "../include/netsend.h"
 #include "../include/globals.h"
+#include "../include/clockman.h"
 
 // TODO dodać to cale oczekiwanie od 5 do 10 sekund
 
@@ -73,6 +77,11 @@ void listen_for_messages(void) {
 }
 
 int main(int argc, char* argv[]) {
+    clk_init();
+    sleep(3);
+    clk_update();
+    clk_print();
+
     sig_setup_signal_handler(); // Just for debugging I guess.
 
     ProgramArgs program_args = args_default();

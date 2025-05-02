@@ -5,8 +5,9 @@
 
 #define G_BUF_SIZE 65535 // FIXME Myślę, że więcej
 
-extern int ncs_sockfd;
-extern uint8_t ncs_buf[G_BUF_SIZE]; // Deklaracja globalnej zmiennej
+extern int      ncs_sockfd;
+extern uint8_t  ncs_sync_lvl; // network order
+extern uint8_t  ncs_buf[G_BUF_SIZE]; // Deklaracja globalnej zmiennej
 
 void g_close_socket(void);
 

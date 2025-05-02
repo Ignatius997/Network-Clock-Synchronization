@@ -1,25 +1,16 @@
 ---- OTWARTE ----
-TODO Absurdalne (wyłącznie 1 lub -1) rozmiary przeslanych wiadomosci wypisywanych przez log_sent i log_received
-1.1.1. Co jeśli drugi raz dodajemy ten sam węzeł? (Sprawdzić treść oraz discorda) TO JEST NA DISCORDZIE, ZGLEBIC
-    Wg mnie, zdroworozsądkowo trzeba sprawdzić, czy ten węzeł już jest w peerach
-    No to jakie mamy sytuacje [`A c B` := connected with, `hello A B` := hello sent to A from B]:
-        - A c B, hello A B.
-            1. Każdy węzeł X przy otrzymaniu (każdego) komunikatu hello od pewnego węzła Y musi sprawdzić, czy XcY.
-            Jeśli XcY, to X wysyła wszystkie jego peery OPRÓCZ Y i nie dodaje (ponownie) Y do swoich peerów. DONE
+TODO 2. Jak nie przekroczyć czasu oczekiwania?
+    Można po każdym odebranym komunikacie sprawdzać, czy czas nie został przekroczony dla jakiegoś zsynchronizowanego peera
+    To by w sumie wymagało przechowywania peerów w kolejce, gdzie wlasnie zsynchronizowane peery przenosilibyśmy na początek.
+    Ażeby oszczędzić na pamięci, możemy przechowywać peery tylko raz.
+    Każdy element takiej kolejki to struktura Peer oraz uint16_t (czy też bool?) synchronized.
+    
+    Jak implementujemy te kolejke?
+        
 
-            2. Każdy węzeł Y przy wysyłaniu (każdego komunikatu) hello do pewnego węzła X musi sprawdzić, czy XcY.
-            Jeśli XcY, to Y nie dodaje (ponownie) X do swoich peerów.
-
-            3. Każdy węzeł Y przy odbieraniu (każdego komunikatu) hello-reply powinien sprawdzić, czy przesłany peer
-            już u niego jest (to zapewne wymaga przechowywania Peerów w drzewie).
-            
-            Te dwie (2,3) sytuacje są skrajnie nieprawdopodobne, jako że musialby zostac wysłany connect od innego
-            węzła między wysłaniem hello a odebraniem hello-reply. Warto ją jednak uwzględnić.
-1.1.2 Co jeśli u starego węzła nie starcza miejsca na nowego? Problem jest też taki, że establish_connection u starego robimy na końcu handle_hello.
-1.1.3. Kiedy węzły A B, które wysyłają sobie hello-reply, powinny dodać siebie do listy peerów?
-1.2.2. Na wszelki zapisać globalnie swoj adres oraz port
-1.2.6. W msg_send (i inncyh funkcjach tego typu) powinniśmy być moze tworzyc kopie msg i konwertowac i przesylac kopię dla swiętego spokoju
-2. Jak nie przekroczyć czasu oczekiwania?
+0. Komunikat HELLO_REPLY należy uznać w całości za błędny, jeśli nie zawiera count rekordów,
+    jeśli któreś z pól peer_address_length lub peer_port ma błędną wartość,
+    jeśli w liście węzłów jest nadawca lub odbiorca tego komunikatu.
 2,5. Obsługa wywalania się odpowiednich funkcji
 3. Jaki ma być MAX_DATA? Co jeśli nie starczy pamięci?
 5. Zamienić funkcję get_peer_address na taką, która przyjmuje wskaźnik do struct sockaddr_in, a nie zwraca te strukture.
@@ -27,6 +18,7 @@ TODO Absurdalne (wyłącznie 1 lub -1) rozmiary przeslanych wiadomosci wypisywan
 7. uint8_t czy unsigned char?
 9. Sprawdzić wszystkie inet_*, w szczególności inet_pton i konwertowanie tych adresów do różnych form
 10. W sumie to te makra można zamienić na enum.
+1.1.2 Co jeśli u starego węzła nie starcza miejsca na nowego? Problem jest też taki, że establish_connection u starego robimy na końcu handle_hello.
 11. Spoofing
 12. Zoptymalizować msg_load i rinfo_load, żeby nie alokować pamięci, skoro i tak tylko kopiujemy rzeczy w istniejącej
     już pamięci.
@@ -38,6 +30,8 @@ TODO Absurdalne (wyłącznie 1 lub -1) rozmiary przeslanych wiadomosci wypisywan
 14. Aktualnie dwa razy przetwarzamy dane z bufora po recvfrom dane. Zwalidujmy i zapiszmy gdzies dane od razu przy
     walidacji (komplikacja zależności bibliotek)
 15. Czy Dac Msginfo i Sendinfo do oddzielnych bibliotek, jak ReceiveInfo?
+16. Zobaczyć, czy węzła z argumentow -ar dodaję przez informacje z args czy z hello-reply. powinienem z args.
+1.2.6. W msg_send (i innych funkcjach tego typu) powinniśmy być moze tworzyc kopie msg i konwertowac i przesylac kopię dla swiętego spokoju
 
 Komentowanie
 Wspomnieć, że niektóre ify są dla "extensibility".
@@ -57,7 +51,7 @@ NA KONIEC
 NOTATKI
 1. Aktualnie "zaniedbujemy" g_buf: nie zerujemy go przed read-em, nie ustawiamy koncowych bajtow na 0.
 
----- ODPOWIEDZI ----
+---- PYTANIA I ODPOWIEDZI ----
 (1) Rozdzielamy HELLO REPLY na dwa komunikaty?
     ODP: Nie, nielegalne
 (2) (Tutaj chodzi o ack_connect) Czy receive_reply jest poprawne: W sensie tam oczekujemy tylko i wyłącznie na HELLO_REPLY, to nienajlepsze? Co robić z innymi komunikatami, które mogą przyjść w międzyczasie? Czy mogą?
@@ -72,14 +66,33 @@ NOTATKI
     ODP Trzeba zignorować komunikaty sync-start, delay-request, delay-response.
         Nie wolno ignorować komunikatów hello, hello-reply, connect, ack-connect, get-time, time, leader.
         Widać zatem, że istnieje pewien podział komunikatów na weryfikowane i nieweryfikowane.
+1.1.1. Co jeśli drugi raz dodajemy ten sam węzeł? (Sprawdzić treść oraz discorda) TO JEST NA DISCORDZIE, ZGLEBIC
+    Wg mnie, zdroworozsądkowo trzeba sprawdzić, czy ten węzeł już jest w peerach
+    No to jakie mamy sytuacje [`A c B` := connected with, `hello A B` := hello sent to A from B]:
+        - A c B, hello A B.
+            1. Każdy węzeł X przy otrzymaniu (każdego) komunikatu hello od pewnego węzła Y musi sprawdzić, czy XcY.
+            Jeśli XcY, to X wysyła wszystkie jego peery OPRÓCZ Y i nie dodaje (ponownie) Y do swoich peerów. DONE
+
+            2. Każdy węzeł Y przy wysyłaniu (każdego komunikatu) hello do pewnego węzła X musi sprawdzić, czy XcY.
+            Jeśli XcY, to Y nie dodaje (ponownie) X do swoich peerów.
+
+            3. Każdy węzeł Y przy odbieraniu (każdego komunikatu) hello-reply powinien sprawdzić, czy przesłany peer
+            już u niego jest (to zapewne wymaga przechowywania Peerów w drzewie).
+            
+            Te dwie (2,3) sytuacje są skrajnie nieprawdopodobne, jako że musialby zostac wysłany connect od innego
+            węzła między wysłaniem hello a odebraniem hello-reply. Warto ją jednak uwzględnić.
+1.1.3. Kiedy węzły A B, które wysyłają sobie hello-reply, powinny dodać siebie do listy peerów?
+    ODP: W sumie to bez większego znaczenia. Aktualnie dodawani są po wysłaniu hello-reply.
 
 
----- ROZWIĄZANE ----
+
+---- ZROBIONE ----
 0.1. Jak w końcu to HELLO_REPLY, jak z innymi? Czy zrobić jakąś klasę i podklasy, tak jak we Futureach? TAK
         - nie miec PeerMessage, to bedzei po prostu w Peer DONE
 1.1.2 Połączyć te pierwsze węzły DONE
 1.1.1.3. Powyższy punkt (1.1.1.2) skłania do tego, by mieć static strukturę MessageInfo DONE
 0. Waliduj peery przy odbieraniu hello-reply DONE
 0. Sprawdzić w connect i ack_connect, czy nie znamy już tego węzła. DONE
+1.2.2. Na wszelki zapisać globalnie swoj adres oraz port DONE, bo przecież jest w ProgramArgs
 
 

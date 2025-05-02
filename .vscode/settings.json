@@ -12,6 +12,7 @@
         "inet.h": "c",
         "peer.h": "c",
         "message.h": "c",
-        "netutil.h": "c"
+        "netutil.h": "c",
+        "wait.h": "c"
     }
 }

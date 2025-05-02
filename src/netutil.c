@@ -131,6 +131,15 @@ void nutil_init_socket(struct sockaddr_in *bind_address,
         syserr("Socket creation failed");
     }
 
+    struct timeval timeout = {
+        .tv_sec = 5,
+        .tv_usec = 0,
+    };
+    setsockopt(ncs_sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+    if (setsockopt(ncs_sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
+        syserr("setsockopt failed"); // NOTE To chyba powinno się wywalić,
+    }
+
     _init_addr(bind_address, addr, port);
 
     if (bind(ncs_sockfd, (struct sockaddr *) bind_address,

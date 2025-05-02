@@ -46,7 +46,9 @@ static void _hello_reply(const HelloReplyReceiveInfo *hr_rinfo) {
 }
 
 static void _connect(const ConnectReceiveInfo *c_rinfo) {
-    nutil_establish_connection(&c_rinfo->base.peer_address);
+    if (peer_find(&c_rinfo->base.peer_address) == NULL) { // Unknown peer.
+        nutil_establish_connection(&c_rinfo->base.peer_address);
+    }
 
     SendInfo sinfo = {
         .peer_address = c_rinfo->base.peer_address,
@@ -56,7 +58,9 @@ static void _connect(const ConnectReceiveInfo *c_rinfo) {
 }
 
 static void _ack_connect(const AckConnectReceiveInfo *ac_rinfo) {
-    nutil_establish_connection(&ac_rinfo->base.peer_address);
+    if (peer_find(&ac_rinfo->base.peer_address) == NULL) { // Unknown peer.
+        nutil_establish_connection(&ac_rinfo->base.peer_address);
+    }
 }
 
 static void _sync_start(const SyncStartReceiveInfo *info) {

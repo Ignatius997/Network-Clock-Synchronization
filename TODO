@@ -1,7 +1,5 @@
 ---- OTWARTE ----
-TODO VALIDUJ PEERY W HELLO-REPLY
-0. Sprawdzić w connect i ack_connect, czy nie znamy już tego węzła.
-0. Reformacja wysyłania: zaaplikować SendInfo
+TODO Absurdalne (wyłącznie 1 lub -1) rozmiary przeslanych wiadomosci wypisywanych przez log_sent i log_received
 1.1.1. Co jeśli drugi raz dodajemy ten sam węzeł? (Sprawdzić treść oraz discorda) TO JEST NA DISCORDZIE, ZGLEBIC
     Wg mnie, zdroworozsądkowo trzeba sprawdzić, czy ten węzeł już jest w peerach
     No to jakie mamy sytuacje [`A c B` := connected with, `hello A B` := hello sent to A from B]:
@@ -84,6 +82,8 @@ NOTATKI
 0.1. Jak w końcu to HELLO_REPLY, jak z innymi? Czy zrobić jakąś klasę i podklasy, tak jak we Futureach? TAK
         - nie miec PeerMessage, to bedzei po prostu w Peer DONE
 1.1.2 Połączyć te pierwsze węzły DONE
-1.1.1.3. Powyższy punkt (1.1.1.2) skłania do tego, by mieć static strukturę MessageInfo DONE 
+1.1.1.3. Powyższy punkt (1.1.1.2) skłania do tego, by mieć static strukturę MessageInfo DONE
+0. Waliduj peery przy odbieraniu hello-reply DONE
+0. Sprawdzić w connect i ack_connect, czy nie znamy już tego węzła. DONE
 
 

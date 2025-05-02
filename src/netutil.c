@@ -141,7 +141,6 @@ void nutil_init_socket(struct sockaddr_in *bind_address,
 }
 
 void nutil_extract_address(const Peer *p, struct sockaddr_in *addr) {
-    // TODO nie da sie sprytniej?
     char peer_ip_str[INET_ADDRSTRLEN];
     if (inet_ntop(AF_INET, (struct in_addr *)p->peer_address,
                   peer_ip_str, INET_ADDRSTRLEN) == NULL) {
@@ -151,16 +150,18 @@ void nutil_extract_address(const Peer *p, struct sockaddr_in *addr) {
     nutil_set_address(peer_ip_str, p->peer_port, addr);
 }
 
-// TODO Możnaby to jakoś ujednolicić, żeby dołączający z _ar_provided też mógł użyć takiej funkcji
+// TODO Możnaby to jakoś ujednolicić, żeby dołączający z _ar_provided też mógł użyć takiej funkcji WTF? O co mi chodziło?
+
+/** Function assumes values in `peer_address` are in network order. */
 void nutil_establish_connection(const struct sockaddr_in *peer_address) {
     uint8_t ip[16] = {0};
     memset(ip, 0, sizeof(ip));
-    memcpy(ip, &peer_address->sin_addr, 4 /*FIXME IPV4_ADDR_LEN*/);
+    memcpy(ip, &peer_address->sin_addr, NUTIL_IPV4_ADDR_LEN);
 
     Peer p;
-    p.peer_address_length = 4 /*FIXME IPV4_ADDR_LEN*/;
-    memcpy(p.peer_address, ip, sizeof(ip) /*FIXME IPV4_ADDR_LEN*/);
-    p.peer_port = peer_address->sin_port; // NOTE bez konwertowania
+    p.peer_address_length = NUTIL_IPV4_ADDR_LEN;
+    memcpy(p.peer_address, ip, sizeof(ip));
+    p.peer_port = peer_address->sin_port;
 
     peer_add(&p);
 }

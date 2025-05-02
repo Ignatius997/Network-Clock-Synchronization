@@ -147,5 +147,5 @@ void nhandle_message(const struct sockaddr_in *peer_address, const ssize_t recv_
     }
 
     free(msg);
-    free(rinfo);
+    rinfo_free(rinfo);
 }

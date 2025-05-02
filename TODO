@@ -1,6 +1,4 @@
 ---- OTWARTE ----
-TODO Sprawdzić program valgrindem
-0. Biblioteki już teraz
 0. Dac Msginfo i Sendinfo do oddzielnych bibliotek, jak ReceiveInfo
 0. Odbieranie Hello reply w switch case
 0. VALIDUJ PEERY W HELLO-REPLY

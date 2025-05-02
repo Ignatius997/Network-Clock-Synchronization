@@ -91,6 +91,19 @@ static void _specified_load(ReceiveInfo *rinfo, const Message *msg) {
     }
 }
 
+void rinfo_free(ReceiveInfo *rinfo) {
+    switch (rinfo->message) {
+        case MSG_HELLO_REPLY:
+            HelloReplyReceiveInfo *hr_rinfo = (HelloReplyReceiveInfo *)rinfo;
+            free(hr_rinfo->peers);
+            break;
+        default:
+            break;
+    }
+
+    free(rinfo);
+}
+
 size_t rinfo_size(const ReceiveInfo *rinfo) {
     return recv_info_size[rinfo->message];
 }

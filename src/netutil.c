@@ -52,12 +52,12 @@ static int _validate_received_length(const ssize_t recv_len) {
 
     if (recv_len < 0) {
         syserr("recvfrom failed"); // NOTE nie powinno się wywalać
-        return -1;
+        return 1;
     }
 
     if (recv_len < (ssize_t) msg_size(msg)) {
         syserr("recvfrom less bytes than message size."); // Można dodać rodzaj msg
-        return -1;
+        return 1;
     }
 
     return 0;
@@ -66,7 +66,7 @@ static int _validate_received_length(const ssize_t recv_len) {
 static int _validate_peer(const Peer *p) {
     if (p->peer_address_length != NUTIL_IPV4_ADDR_LEN) {
         syserr("Received incorrect peers"); // NOTE ofc nie powinno się wywalać
-        return -1;
+        return 1;
     }
     
     return 0;
@@ -85,7 +85,7 @@ static int _validate_peers() {
             fprintf(stderr, "Validating peers:\n");
             for (size_t i = 0; i < peers_count; ++i) {
                 Peer *p = (Peer *) (ncs_buf + offset);
-                if (_validate_peer(p) != 0) return -1; // Failure
+                if (_validate_peer(p) != 0) return 1; // Failure
                 offset += sizeof(Peer);
             }
         }
@@ -169,8 +169,8 @@ void nutil_establish_connection(const struct sockaddr_in *peer_address) {
 int nutil_validate_received_data(const struct sockaddr_in *peer_address,
                                  const ssize_t recv_len) {
     int ret = _validate_received_length(recv_len);
-    if (ret != 0) ret = _validate_address(peer_address);
-    if (ret != 0) ret = _validate_peers();
+    if (ret == 0) ret = _validate_address(peer_address);
+    if (ret == 0) ret = _validate_peers();
 
     return ret;
 }

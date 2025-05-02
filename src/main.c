@@ -35,7 +35,7 @@ ssize_t receive_message(struct sockaddr_in *peer_address) {
                                 (struct sockaddr *) peer_address, &addr_len);
     int val = nutil_validate_received_data(peer_address, recv_len);
 
-    return val != 0 ? recv_len : -1;
+    return val == 0 ? recv_len : -1;
 }
 
 void join_network(const ProgramArgs *args) {

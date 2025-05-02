@@ -33,17 +33,17 @@ __attribute__((constructor)) static void _initialize_recv_info(void) {
     _set_recv_info_size();
 }
 
-static void _load_hello_reply(HelloReplyReceiveInfo *info) {
-    uint16_t peers_count = ntohs(info->msg.count);
+static void _load_hello_reply(HelloReplyReceiveInfo *hr_rinfo) {
+    uint16_t peers_count = ntohs(hr_rinfo->msg.count);
 
     if (peers_count > 0) {
-        info->peers = malloc(peers_count * sizeof(Peer));
-        if (info->peers == NULL) syserr("malloc failed");
-        memcpy(info->peers, ncs_buf + msg_size((Message *)&info->msg), peers_count * sizeof(Peer));
+        hr_rinfo->peers = malloc(peers_count * sizeof(Peer));
+        if (hr_rinfo->peers == NULL) syserr("malloc failed");
+        memcpy(hr_rinfo->peers, ncs_buf + msg_size((Message *)&hr_rinfo->msg), peers_count * sizeof(Peer));
 
         fprintf(stderr, "Peers from HELLO_REPLY:\n");
         for (size_t i = 0; i < peers_count; ++i) {
-            peer_print(&info->peers[i]);
+            peer_print(&hr_rinfo->peers[i]);
         }
         fprintf(stderr, "\n");
     }
@@ -54,36 +54,36 @@ static void _basic_load(ReceiveInfo *info, const struct sockaddr_in *peer_addres
     info->peer_address = *peer_address;
 }
 
-static void _specified_load(ReceiveInfo *info, const Message *msg) {
-    switch (info->message) {
+static void _specified_load(ReceiveInfo *rinfo, const Message *msg) {
+    switch (rinfo->message) {
         /** Cases of MSG_HELLO and others are not included, because
          * size of e.g. HelloReceiveInfo is equal to ReceiveInfo size.
          */
 
         case MSG_HELLO_REPLY:
-            HelloReplyReceiveInfo *hello_reply_info = (HelloReplyReceiveInfo *)info;
-            memcpy(&hello_reply_info->msg, msg, msg_size(msg));
-            _load_hello_reply(hello_reply_info);
+            HelloReplyReceiveInfo *hr_rinfo = (HelloReplyReceiveInfo *)rinfo;
+            memcpy(&hr_rinfo->msg, msg, msg_size(msg));
+            _load_hello_reply(hr_rinfo);
             break;
 
         case MSG_SYNC_START:
-            SyncStartReceiveInfo *sync_start_info = (SyncStartReceiveInfo *)info;
-            memcpy(&sync_start_info->msg, msg, msg_size(msg));
+            SyncStartReceiveInfo *ss_rinfo = (SyncStartReceiveInfo *)rinfo;
+            memcpy(&ss_rinfo->msg, msg, msg_size(msg));
             break;
 
         case MSG_DELAY_RESPONSE:
-            DelayResponseReceiveInfo *delay_response_info = (DelayResponseReceiveInfo *)info;
-            memcpy(&delay_response_info->msg, msg, msg_size(msg));
+            DelayResponseReceiveInfo *dr_rinfo = (DelayResponseReceiveInfo *)rinfo;
+            memcpy(&dr_rinfo->msg, msg, msg_size(msg));
             break;
 
         case MSG_LEADER:
-            LeaderReceiveInfo *leader_info = (LeaderReceiveInfo *)info;
-            memcpy(&leader_info->msg, msg, msg_size(msg));
+            LeaderReceiveInfo *l_rinfo = (LeaderReceiveInfo *)rinfo;
+            memcpy(&l_rinfo->msg, msg, msg_size(msg));
             break;
 
         case MSG_TIME:
-            TimeReceiveInfo *time_info = (TimeReceiveInfo *)info;
-            memcpy(&time_info->msg, msg, msg_size(msg));
+            TimeReceiveInfo *t_rinfo = (TimeReceiveInfo *)rinfo;
+            memcpy(&t_rinfo->msg, msg, msg_size(msg));
             break;
 
         default:
@@ -91,26 +91,26 @@ static void _specified_load(ReceiveInfo *info, const Message *msg) {
     }
 }
 
-size_t rinfo_size(const ReceiveInfo *info) {
-    return recv_info_size[info->message];
+size_t rinfo_size(const ReceiveInfo *rinfo) {
+    return recv_info_size[rinfo->message];
 }
 
 ReceiveInfo *rinfo_load(const struct sockaddr_in *peer_address, const Message *msg) {
-    ReceiveInfo *info = malloc(sizeof(ReceiveInfo));
-    if (info == NULL) syserr("malloc nrecv_info_load");
+    ReceiveInfo *rinfo = malloc(sizeof(ReceiveInfo));
+    if (rinfo == NULL) syserr("malloc nrecv_info_load");
 
-    _basic_load(info, peer_address, msg);
+    _basic_load(rinfo, peer_address, msg);
     
-    if (rinfo_size(info) > sizeof(ReceiveInfo)) {
-        ReceiveInfo *tmp_info = realloc(info, rinfo_size(info));
-        if (tmp_info == NULL) {
-            free(info);
+    if (rinfo_size(rinfo) > sizeof(ReceiveInfo)) {
+        ReceiveInfo *tmp_rinfo = realloc(rinfo, rinfo_size(rinfo));
+        if (tmp_rinfo == NULL) {
+            free(rinfo);
             syserr("realloc rinfo_load");
         }
 
-        info = tmp_info;
-        _specified_load(info, msg);
+        rinfo = tmp_rinfo;
+        _specified_load(rinfo, msg);
     }
 
-    return info;
+    return rinfo;
 }

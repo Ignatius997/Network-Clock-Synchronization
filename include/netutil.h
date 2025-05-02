@@ -10,7 +10,7 @@
 void cmn_close_socket(const int sockfd);
 
 void     nutil_set_address(char const *peer_ip_str, const uint16_t port, struct sockaddr_in *addr);
-void     nutil_init_socket(int *sockfd, struct sockaddr_in *bind_address, const char *addr, const uint16_t port);
+void     nutil_init_socket(struct sockaddr_in *bind_address, const char *addr, const uint16_t port);
 void     nutil_extract_address(const Peer *p, struct sockaddr_in *addr);
 void     nutil_establish_connection(const struct sockaddr_in *peer_address);
 int      nutil_validate_received_data(const struct sockaddr_in *peer_address, const ssize_t recv_len);

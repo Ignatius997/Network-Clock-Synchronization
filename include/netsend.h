@@ -14,8 +14,6 @@ typedef struct {
     // NOTE Szczerze to pole `known` nie powinno się tu znajdować.
 } SendInfo;
 
-void nsend_set_socket_fd(const int sockfd);
-
 void nsend_hello(SendInfo *sinfo);
 void nsend_hello_reply(SendInfo *sinfo);
 void nsend_connect(SendInfo *sinfo);

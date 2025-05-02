@@ -27,11 +27,6 @@
 
 #define IPV4_ADDR_LEN 4
 
-/** Node attributes shall be accessible via global variables.
- * Naming convention: g_{name}.
- */
-int      g_socket_fd; // ofc host order
-
 // TODO te całe wysyłanie możnaby jakoś ujednolicić.
 // TODO dodać to cale oczekiwanie od 5 do 10 sekund
 
@@ -39,7 +34,7 @@ int      g_socket_fd; // ofc host order
 // NOTE ncs_buf ma być z idei ukryty.
 ssize_t receive_message(struct sockaddr_in *peer_address) {
     socklen_t addr_len = (socklen_t) sizeof(*peer_address);
-    ssize_t recv_len = recvfrom(g_socket_fd, ncs_buf, sizeof(ncs_buf), 0,
+    ssize_t recv_len = recvfrom(ncs_sockfd, ncs_buf, sizeof(ncs_buf), 0,
                                 (struct sockaddr *) peer_address, &addr_len);
     int val = nutil_validate_received_data(peer_address, recv_len);
     (void)val; // NOTE nieużyta zmienna
@@ -87,12 +82,12 @@ int main(int argc, char* argv[]) {
     args_validate(&program_args);
 
     struct sockaddr_in bind_address; // To avoid allocation on the stack.
-    nutil_init_socket(&g_socket_fd, &bind_address, program_args.bind_address, program_args.port);
-    nsend_set_socket_fd(g_socket_fd); // XD, ta linijka właśnie pokazuje, jak głupi jest nie-static socket_fd
+    nutil_init_socket(&bind_address, program_args.bind_address, program_args.port);
     
     join_network(&program_args);
     listen_for_messages();
     
-    cmn_close_socket(g_socket_fd);
+    g_close_socket();
+    peer_free_all();
     return 0;
 }

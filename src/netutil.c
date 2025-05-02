@@ -16,13 +16,6 @@
 #include "../include/globals.h"
 #include "../include/err.h"
 
-void cmn_close_socket(const int sockfd) {
-    if (sockfd >= 0) {
-        close(sockfd);
-        fprintf(stderr, "Socket closed.\n");
-    }
-}
-
 // ==== Internal helper functions ====
 
 static uint32_t nutil_extract_ip4(const char *addr) {
@@ -134,18 +127,18 @@ void nutil_set_address(char const *peer_ip_str, const uint16_t port,
 }
 
 // TODO obsłużyć przypadek bez podanego portu (chyba obsluzony, bo port wtedy jest rowny 0)
-void nutil_init_socket(int *sockfd, struct sockaddr_in *bind_address,
+void nutil_init_socket(struct sockaddr_in *bind_address,
                        const char *addr, const uint16_t port) {
-    *sockfd = socket(AF_INET, SOCK_DGRAM, 0);
-    if (*sockfd < 0) {
+    ncs_sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+    if (ncs_sockfd < 0) {
         syserr("Socket creation failed");
     }
 
     _init_addr(bind_address, addr, port);
 
-    if (bind(*sockfd, (struct sockaddr *) bind_address,
+    if (bind(ncs_sockfd, (struct sockaddr *) bind_address,
              (socklen_t) sizeof(*bind_address)) < 0) {
-        cmn_close_socket(*sockfd);
+        g_close_socket();
         syserr("bind");
     }
 }

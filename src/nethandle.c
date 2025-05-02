@@ -45,18 +45,18 @@ static void _hello_reply(const HelloReplyReceiveInfo *hr_rinfo) {
     }
 }
 
-static void _connect(const ConnectReceiveInfo *info) {
-    nutil_establish_connection(&info->base.peer_address);
+static void _connect(const ConnectReceiveInfo *c_rinfo) {
+    nutil_establish_connection(&c_rinfo->base.peer_address);
 
     SendInfo sinfo = {
-        .peer_address = info->base.peer_address,
+        .peer_address = c_rinfo->base.peer_address,
         .len = -1,
     };
     nsend_ack_connect(&sinfo);
 }
 
-static void _ack_connect(const AckConnectReceiveInfo *info) {
-    nutil_establish_connection(&info->base.peer_address);
+static void _ack_connect(const AckConnectReceiveInfo *ac_rinfo) {
+    nutil_establish_connection(&ac_rinfo->base.peer_address);
 }
 
 static void _sync_start(const SyncStartReceiveInfo *info) {
@@ -97,48 +97,48 @@ void nhandle_message(const struct sockaddr_in *peer_address, const ssize_t recv_
         syserr("Nie znom jo tego chłopa."); // NOTE nie powinno się wywalać, lecz chyba coś powinno wypisywać
     }
 
-    ReceiveInfo *info = rinfo_load(peer_address, msg);
+    ReceiveInfo *rinfo = rinfo_load(peer_address, msg);
     log_received_message(peer_address, msg, recv_len);
 
     switch (msg->message) {
         case MSG_HELLO:
-            _hello((HelloReceiveInfo *)info);
+            _hello((HelloReceiveInfo *)rinfo);
             break;
 
         case MSG_HELLO_REPLY:
-            _hello_reply((HelloReplyReceiveInfo *)info);
+            _hello_reply((HelloReplyReceiveInfo *)rinfo);
             break;
 
         case MSG_CONNECT:
-            _connect((ConnectReceiveInfo *)info);
+            _connect((ConnectReceiveInfo *)rinfo);
             break;
 
         case MSG_ACK_CONNECT:
-            _ack_connect((AckConnectReceiveInfo *)info);
+            _ack_connect((AckConnectReceiveInfo *)rinfo);
             break;
 
         case MSG_SYNC_START:
-            _sync_start((SyncStartReceiveInfo *)info);
+            _sync_start((SyncStartReceiveInfo *)rinfo);
             break;
 
         case MSG_DELAY_REQUEST:
-            _delay_request((DelayRequestReceiveInfo *)info);
+            _delay_request((DelayRequestReceiveInfo *)rinfo);
             break;
 
         case MSG_DELAY_RESPONSE:
-            _delay_response((DelayResponseReceiveInfo *)info);
+            _delay_response((DelayResponseReceiveInfo *)rinfo);
             break;
 
         case MSG_LEADER:
-            _leader((LeaderReceiveInfo *)info);
+            _leader((LeaderReceiveInfo *)rinfo);
             break;
 
         case MSG_GET_TIME:
-            _get_time((GetTimeReceiveInfo *)info);
+            _get_time((GetTimeReceiveInfo *)rinfo);
             break;
 
         case MSG_TIME:
-            _time((TimeReceiveInfo *)info);
+            _time((TimeReceiveInfo *)rinfo);
             break;
 
         default:
@@ -147,5 +147,5 @@ void nhandle_message(const struct sockaddr_in *peer_address, const ssize_t recv_
     }
 
     free(msg);
-    free(info);
+    free(rinfo);
 }

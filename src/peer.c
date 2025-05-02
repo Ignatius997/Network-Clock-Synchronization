@@ -37,6 +37,10 @@ void peer_add(const Peer *p) {
     memcpy(&peer_manager.peers[peer_manager.count++], p, sizeof(Peer));
 }
 
+void peer_free_all(void) {
+    free(peer_manager.peers);
+}
+
 /** O(peer_manager.count) */
 Peer* peer_find(const struct sockaddr_in *peer_address) {
     uint16_t port = peer_address->sin_port;

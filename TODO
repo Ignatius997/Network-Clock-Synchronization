@@ -1,8 +1,6 @@
 ---- OTWARTE ----
-TODO Teraz podczas ujednolicenia wysyłania widać, jaką patologię przynosis nie-globalny na poziomie projektu bufor
-TODO SendInfo i ujednolicenie wysyłania
 TODO Lepsze nazwy ReceiveInfo: rinfo
-TODO Można zapisać wskaźnik do bufora danych w bibliotekach. Nawet lepiej: zrobić go totalnie globalnym
+TODO Globalny socket_fd
 0. Biblioteki już teraz
 0. Dac Msginfo i Sendinfo do oddzielnych bibliotek, jak ReceiveInfo
 0. Odbieranie Hello reply w switch case

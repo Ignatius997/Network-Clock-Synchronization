@@ -9,12 +9,6 @@
 #include "../include/err.h"
 #include "../include/globals.h"
 
-static int socket_fd;
-
-void nsend_set_socket_fd(const int sockfd) {
-    socket_fd = sockfd;
-}
-
 // peer_index to indeks typa, ktorego nie przesyłamy
 static void _prepare_buffer_for_sending(const Message *msg, const ssize_t peer_index) {
     memcpy(ncs_buf, msg, msg_size(msg)); // Load message to buffer.
@@ -51,7 +45,7 @@ static void _send_message(SendInfo *sinfo, const Message *msg) {
     size_t len = sinfo->len < 0 ? msg_size(msg) : (size_t) sinfo->len;
     socklen_t addr_len = (socklen_t) sizeof(sinfo->peer_address);
     
-    sinfo->len = sendto(socket_fd, buf, len, 0,
+    sinfo->len = sendto(ncs_sockfd, buf, len, 0,
                         (struct sockaddr *) &sinfo->peer_address, addr_len);
     if (sinfo->len < 0) {
         syserr("sendto"); // NOTE ofc nie powinno się wywalać

@@ -6,7 +6,22 @@ TODO 2. Jak nie przekroczyć czasu oczekiwania?
     Każdy element takiej kolejki to struktura Peer oraz uint16_t (czy też bool?) synchronized.
     
     Jak implementujemy te kolejke?
-        
+
+TODO Problem przechowywania Peer-ów.
+    Z jednej strony przy sprawdzaniu, czy czas nie został przekroczony dla jakiegoś zsynchronizowanego peera,
+    to chcemy, żeby sprawdzano te najbardziej podejrzane Peery.
+    Chcemy zatem kolejki takiej, że jeśli dla pewnego Peera w tej kolejce czas nie został przekroczony,
+    to dla wszystkich następujących po nim Peer-ów zachodził ten sam warunek.
+    Czyli taka kolejka, że jeśli zostałeś zsynchronizowany (SYNC_START), to lecisz na koniec tej kolejki.
+    W ten sposób ta kolejka jest od pewnego miejsca posortowana ze względu na czas upłynięty od synchronizacji.
+
+    Z drugiej strony chcemy mieć szybki (logarytmiczny) dostęp do tych peerów, ażeby ...
+    No właśnie, o co mi chodziło?
+
+TODO Zbiór węzłów synchronizowanych = zbiór węzłow: (Peer, synchronized)
+    Raczej musimy to trzymać w drzewie
+    Możemy po prostu zamienić peer.c na peer.cpp i użyć set-a.
+    Ażeby zrobić to poprawnie, należy spojrzeć na projekt kolejek z KPCPP
 
 0. Komunikat HELLO_REPLY należy uznać w całości za błędny, jeśli nie zawiera count rekordów,
     jeśli któreś z pól peer_address_length lub peer_port ma błędną wartość,

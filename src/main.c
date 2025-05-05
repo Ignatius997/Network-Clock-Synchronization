@@ -78,9 +78,6 @@ void listen_for_messages(void) {
 }
 
 int main(int argc, char* argv[]) {
-    test_peer_find_time();
-    exit(0);
-
     sig_setup_signal_handler(); // Just for debugging I guess.
 
     ProgramArgs program_args = args_default();

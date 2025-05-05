@@ -33,6 +33,7 @@ void peer_add(const Peer *p) {
 
     if (peer_manager.count == PEER_MAX) limit_reached = true;
 
+    // TODO Delete when sure about a static memory table.
     // if (peer_manager.count + 1 >= peer_manager.capacity) {
     //     peer_manager.capacity = (peer_manager.capacity == 0) ? 1 : peer_manager.capacity << 1;
     //     peer_manager.peers = (Peer *) realloc(peer_manager.peers, peer_manager.capacity * sizeof(Peer));
@@ -42,6 +43,7 @@ void peer_add(const Peer *p) {
     memcpy(&peer_manager.peers[peer_manager.count++], p, sizeof(Peer));
 }
 
+// TODO Delete when sure about a static memory table.
 void peer_free_all(void) {
     // free(peer_manager.peers); // NOTE Invalid for static table.
 }
@@ -80,7 +82,7 @@ const Peer* peer_get_all(void) {
 
 void peer_print(const Peer *p) {
     if (p == NULL) {
-        fprintf(stderr, "Perr is NULL.\n");
+        fprintf(stderr, "Peer is NULL.\n");
         return;
     }
 

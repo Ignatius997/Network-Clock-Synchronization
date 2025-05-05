@@ -16,7 +16,7 @@ static void _prepare_buffer_for_sending(const Message *msg, const ssize_t peer_i
     
     if (msg->message == MSG_HELLO_REPLY) {
         size_t full_len = ntohs(((HelloReplyMessage *)msg)->count) * sizeof(Peer);
-        void *src1  = peer_get_all();
+        const void *src1  = peer_get_all();
         void *dest1 = ncs_buf + msg_size(msg);
 
         // Load peers to buffer
@@ -26,7 +26,7 @@ static void _prepare_buffer_for_sending(const Message *msg, const ssize_t peer_i
             // NOTE Czy sprawdzać, czy nie wychodzimy poza bufor?
             size_t len1 = peer_index * sizeof(Peer);
             size_t len2 = full_len - len1;
-            void *src2  = src1 + len1 + sizeof(Peer);
+            const void *src2  = src1 + len1 + sizeof(Peer);
             void *dest2 = dest1 + len1;
 
             memcpy(dest1, src1, len1);

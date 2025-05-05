@@ -10,18 +10,61 @@
 #include "../include/peer.h"
 #include "../include/err.h"
 
+/**
+ * PeerManager
+ * 
+ * A structure responsible for managing the list of known peers in the P2P network.
+ * It maintains a static array of `Peer` structures and tracks the number of currently
+ * stored peers.
+ *
+ * Fields:
+ * - `peers`   : A static array of `Peer` structures storing information about known peers.
+ * - `count`   : The current number of peers stored in the `peers` array.
+ *
+ * Notes:
+ * - If `count` reaches the value of `PEER_MAX`, no more peers can be added.
+ */
 typedef struct {
     Peer peers[PEER_MAX];
     uint16_t count;
-    uint16_t capacity;
 } PeerManager;
 
-static bool limit_reached = false;
 static PeerManager peer_manager = {0};
+static bool limit_reached = false; // Tells, whether limit in `peers` table has been reached
 
+/**
+ * SyncManager
+ *
+ * A structure responsible for managing synchronization information for the node.
+ * It tracks the synchronization level and the timestamp of the last synchronization
+ * with a peer in the P2P network.
+ *
+ * Fields:
+ * - `sync_id`        : The index of the peer in the `peers` array with which the node is synchronized.
+ *                      This value is irrelevant if `sync_lvl` equals 255, indicating no synchronization.
+ * - `sync_lvl`       : Synchronization level, stored in network byte order.
+ *                      A value of 255 indicates no synchronization.
+ * - `sync_timestamp` : The value of `ncs_natural_clock` at the moment of the last
+ *                      synchronization, stored in host byte order. This field is
+ *                      irrelevant if `sync_lvl` equals 255.
+ *
+ * Notes:
+ * - This structure is initialized automatically using the `_init_sync_manager` function.
+ */
+typedef struct {
+    uint16_t sync_id;
+    uint16_t sync_lvl;
+    uint64_t sync_timestamp;
+} SyncManager;
+
+static SyncManager sync_man = {0};
+
+__attribute__((constructor)) static void _init_sync_manager() {
+    sync_man.sync_lvl = htons(255);
+}
+
+// TODO Delete - static table.
 void peer_cleanup(void) {
-    // free(peer_manager.peers);
-    // peer_manager.peers = {0}; // czy też NULL dla ptr
     peer_manager.count = 0;
     peer_manager.capacity = 0;
 }
@@ -33,17 +76,10 @@ void peer_add(const Peer *p) {
 
     if (peer_manager.count == PEER_MAX) limit_reached = true;
 
-    // TODO Delete when sure about a static memory table.
-    // if (peer_manager.count + 1 >= peer_manager.capacity) {
-    //     peer_manager.capacity = (peer_manager.capacity == 0) ? 1 : peer_manager.capacity << 1;
-    //     peer_manager.peers = (Peer *) realloc(peer_manager.peers, peer_manager.capacity * sizeof(Peer));
-    //     if (peer_manager.peers == NULL) syserr("realloc");
-    // }
-
     memcpy(&peer_manager.peers[peer_manager.count++], p, sizeof(Peer));
 }
 
-// TODO Delete when sure about a static memory table.
+// TODO Delete - static table.
 void peer_free_all(void) {
     // free(peer_manager.peers); // NOTE Invalid for static table.
 }

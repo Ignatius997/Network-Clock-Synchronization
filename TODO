@@ -1,7 +1,26 @@
 ---- OTWARTE ----
-Czy węzeł może być zsynchronizowany z więcej niż jednym peer-em naraz?
-    GPT: Nie,
-    Ja:  
+NOTE Wybraniec to ten, z którym węzeł jest zsynchronizowany.
+NOTE Nadawca to skrót od nadawcy SYNC_START.
+
+TODO Workflow głównej pętli z kontrolą czasu
+    Zakończenie czekania
+    1. Wiadomość
+        - Zareaguj na wiadomość
+    2. Timeout
+        - Zareaguj na timeout w zależności od tego, w jakiej fazie jesteś:
+            1. Oczekiwanie na SYNC_START od Wybrańca:
+                Usuń informacje o synchronizacji z Wybrańcem.
+            2. Oczekiwanie na DELAY_RESPONSE od Nadawcy:
+                Zaniechaj 
+
+TODO Jak reagować na komunikaty inne niż DELAY_RESPONSE odebrane pomiędzy SYNC_START a DELAY_RESPONSE?
+    Ignorować
+        + Synchronizacja to serce programu, najważniejsza procedura. Musimy poprawnie nawiązać połączenie i nie zważać na to, co dzieje się naokoło
+        - Musimy odpowiedzieć na GET_TIME niezależnie od okoliczności
+
+TODO Jak dokładnie działa setsockopt?
+    1. Jak obsługuje się timeout i jak w ogóle wiedzieć, że timeout nastąpił?
+    2. Czy ten czas liczony jest cały czas, również podczas wykonywania jakichś operacji, czy tylko podczas oczekiwania?
 
 TODO 2. Jak nie przekroczyć czasu oczekiwania?
     Można po każdym odebranym komunikacie (lub timeoucie) sprawdzać, czy czas nie został przekroczony dla jakiegoś zsynchronizowanego peera
@@ -11,9 +30,11 @@ TODO 2. Jak nie przekroczyć czasu oczekiwania?
     Sam setsockopt będzie wykonywany wiele razy w zależności od fazy, w jakiej węzeł się znajduje.
 
     SETSOCKOPT
-    Ale zaraz, jeśli nie chcemy odbierać zbyt późnego komunikatu SYNC_START, to powinniśmy albo (a) albo (b):
+    Ale zaraz, jeśli nie chcemy odbierać zbyt późnego komunikatu SYNC_START, to powinno być albo (a) albo (b):
     (a) setsockopt powinno zostać ustawione na minimalny pozostały czas do odebrania SYNC_START od pewnego zsynchronizowanego węzła,
-    (b)
+    (b) w momencie odebrania SYNC_START możemy sprawdzić, jaki czas upłynął od ostatniego SYNC_START i podjąć decyzję, czy synchronizujemy.
+    Jako że można być zsynchronizowanym z tylko jednym węzłem, to rozwiązanie (a) wydaje się lepsze.
+    Czyli jeśli jesteśmy z kimś zsynchronizowani
 
 TODO Problem przechowywania Peer-ów.
     1. Z jednej strony przy sprawdzaniu, czy czas nie został przekroczony dla jakiegoś zsynchronizowanego peera,
@@ -24,19 +45,15 @@ TODO Problem przechowywania Peer-ów.
         W ten sposób ta kolejka jest od pewnego miejsca posortowana ze względu na czas upłynięty od synchronizacji.
 
     Z drugiej strony chcemy mieć szybki (logarytmiczny) dostęp do tych peerów, ażeby ...
-        No właśnie, o co mi chodziło?
+        No właśnie, o co mi chodziło...?
 
     2. W sprawie sprawdzania, czy dla jakiegoś peera, nie przekroczono czasu:
         Czas iteracji przez wszystkie peery trwa < 1 ms, więc nie ma co tego optymalizować.
 
     3. Tak naprawdę główny problem leży w tym, że potrzebujemy przechowywać również poniższe informacje:
         (a) poziom synchronizacji (uint16_t),
-        (b) czas od ostatniej synchronizacji, jeśli poziom synchronizacji != 255.
-
-TODO Zbiór węzłów synchronizowanych = zbiór węzłow: (Peer, synchronized)
-    Raczej musimy to trzymać w drzewie
-    Możemy po prostu zamienić peer.c na peer.cpp i użyć set-a.
-    Ażeby zrobić to poprawnie, należy spojrzeć na projekt kolejek z KPCPP
+        (b) czas od ostatniej synchronizacji jako punkt zegara naturalnego, jeśli poziom synchronizacji != 255.
+        Ale zaraz! Te informacje przechowujemy tylko dla jednego węzła: ZSYNCHRONIZOWANEGO!!!
 
 0. Komunikat HELLO_REPLY należy uznać w całości za błędny, jeśli nie zawiera count rekordów,
     jeśli któreś z pól peer_address_length lub peer_port ma błędną wartość,
@@ -114,6 +131,8 @@ Wspomnieć, że niektóre ify są dla "extensibility".
     ODP: W sumie to bez większego znaczenia. Aktualnie dodawani są po wysłaniu hello-reply.
 (5) Ile zajmuje przejście przez całą listę peerów (max 65535) i porównanie 3 rzeczy?
     ODP: < 1 ms
+(6) Czy węzeł może być zsynchronizowany z więcej niż jednym peer-em naraz?
+    ODP: Nie
 
 ---- ZROBIONE ----
 0.1. Jak w końcu to HELLO_REPLY, jak z innymi? Czy zrobić jakąś klasę i podklasy, tak jak we Futureach? TAK

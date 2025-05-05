@@ -1,4 +1,6 @@
 ---- OTWARTE ----
+TODO Ile zajmuje przejście przez całą listę peerów (max 65535) i porównanie 3 rzeczy, a mianowicie 
+
 TODO 2. Jak nie przekroczyć czasu oczekiwania?
     Można po każdym odebranym komunikacie sprawdzać, czy czas nie został przekroczony dla jakiegoś zsynchronizowanego peera
     To by w sumie wymagało przechowywania peerów w kolejce, gdzie wlasnie zsynchronizowane peery przenosilibyśmy na początek.

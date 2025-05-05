@@ -9,8 +9,12 @@
  * Naming convention: nsc_{name} (nsc from netclocksync).
  */
 int      ncs_sockfd   = -1; // ofc host order
-uint16_t ncs_sync_lvl = htons(255);
+uint16_t ncs_sync_lvl;
 uint8_t  ncs_buf[G_BUF_SIZE] = {0}; // Definicja globalnej zmiennej
+
+__attribute__((constructor)) static void g_init_globals() {
+    ncs_sync_lvl = htons(255); // Inicjalizacja zmiennej
+}
 
 void g_close_socket() {
     if (ncs_sockfd >= 0) {

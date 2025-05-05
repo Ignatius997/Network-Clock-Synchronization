@@ -2,7 +2,10 @@
 #define PEER_H
 
 #include <stdint.h>
-#include <netinet/in.h> // FIXME A nie arpa?
+#include <arpa/inet.h>
+#include <stdint.h>
+
+#define PEER_MAX UINT16_MAX // Max amount of peers
 
 /** Structure representing peer.
  * `peer_port` field is *always* held in network order.
@@ -23,7 +26,7 @@ ssize_t peer_index(const Peer *p);
 
 // Funkcje do zarządzania listą peerów
 uint16_t peer_get_count(void); // Pobranie liczby znanych peerów
-Peer* peer_get_all(void); // Pobranie wskaźnika do listy peerów
+const Peer* peer_get_all(void); // Pobranie wskaźnika do listy peerów
 
 void peer_print(const Peer *p); // Wypisanie informacji o peerze
 void peer_all_print(const Peer *peers);

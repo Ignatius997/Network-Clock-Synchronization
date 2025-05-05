@@ -78,9 +78,38 @@ void listen_for_messages(void) {
 
 int main(int argc, char* argv[]) {
     clk_init();
-    sleep(3);
-    clk_update();
-    clk_print();
+    
+    uint16_t i = 0;
+    for (;;) {
+        Peer p = {
+            .peer_address_length = 4,
+            .peer_address = {0},
+            .peer_port = htons(i),
+        };
+        peer_add(&p);
+
+        if (++i == PEER_MAX) break;
+    } fprintf(stderr, "i=%" PRIu16 "\n", i);
+
+    clk_update_tmp();
+    fprintf(stderr, "Creation: ");
+    clk_print_tmp();
+    clk_start_tmp();
+
+    struct sockaddr_in s = {
+        .sin_family = AF_INET,
+        .sin_port = htons(PEER_MAX),
+        .sin_addr.s_addr = htonl(0), // NOTE Shady.
+    };
+    Peer *p = peer_find(&s);
+
+    clk_update_tmp();
+    fprintf(stderr, "Find: ");
+    clk_print_tmp();
+
+    peer_print(p);
+
+    exit(0);
 
     sig_setup_signal_handler(); // Just for debugging I guess.
 

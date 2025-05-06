@@ -1,6 +1,6 @@
 ---- OTWARTE ----
 NOTE Wybraniec to ten, z którym węzeł jest zsynchronizowany.
-NOTE Nadawca to skrót od nadawcy SYNC_START.
+NOTE SSnadawca to skrót od nadawcy SYNC_START.
 
 TODO Workflow głównej pętli z kontrolą czasu
     Zakończenie czekania
@@ -10,19 +10,10 @@ TODO Workflow głównej pętli z kontrolą czasu
         - Zareaguj na timeout w zależności od tego, w jakiej fazie jesteś:
             1. Oczekiwanie na SYNC_START od Wybrańca:
                 Usuń informacje o synchronizacji z Wybrańcem.
-            2. Oczekiwanie na DELAY_RESPONSE od Nadawcy:
-                Zaniechaj 
+            2. Oczekiwanie na DELAY_RESPONSE od SSnadawcy:
+                Zaniechaj dalszej synchronizacji
 
-TODO Jak reagować na komunikaty inne niż DELAY_RESPONSE odebrane pomiędzy SYNC_START a DELAY_RESPONSE?
-    Ignorować
-        + Synchronizacja to serce programu, najważniejsza procedura. Musimy poprawnie nawiązać połączenie i nie zważać na to, co dzieje się naokoło
-        - Musimy odpowiedzieć na GET_TIME niezależnie od okoliczności
-
-TODO Jak dokładnie działa setsockopt?
-    1. Jak obsługuje się timeout i jak w ogóle wiedzieć, że timeout nastąpił?
-    2. Czy ten czas liczony jest cały czas, również podczas wykonywania jakichś operacji, czy tylko podczas oczekiwania?
-
-TODO 2. Jak nie przekroczyć czasu oczekiwania?
+TODO 2. Jak nie przekroczyć czasu oczekiwania na komunikat?
     Można po każdym odebranym komunikacie (lub timeoucie) sprawdzać, czy czas nie został przekroczony dla jakiegoś zsynchronizowanego peera
     Czyli po prostu iterujemy przez całą tablicę peerów i jazda.
 
@@ -35,6 +26,9 @@ TODO 2. Jak nie przekroczyć czasu oczekiwania?
     (b) w momencie odebrania SYNC_START możemy sprawdzić, jaki czas upłynął od ostatniego SYNC_START i podjąć decyzję, czy synchronizujemy.
     Jako że można być zsynchronizowanym z tylko jednym węzłem, to rozwiązanie (a) wydaje się lepsze.
     Czyli jeśli jesteśmy z kimś zsynchronizowani
+
+    ODP: Należy PRZED KAŻDĄ OPERACJĄ RECVFROM wykonać setsockopt(ncs_sockfd, SO_RCVTIMEO, ...) z odpowiednim czasem.
+        Ten czas może być poprzednio ustawionym czasem zmodyfikowanym 
 
 TODO Problem przechowywania Peer-ów.
     1. Z jednej strony przy sprawdzaniu, czy czas nie został przekroczony dla jakiegoś zsynchronizowanego peera,
@@ -58,11 +52,9 @@ TODO Problem przechowywania Peer-ów.
 0. Komunikat HELLO_REPLY należy uznać w całości za błędny, jeśli nie zawiera count rekordów,
     jeśli któreś z pól peer_address_length lub peer_port ma błędną wartość,
     jeśli w liście węzłów jest nadawca lub odbiorca tego komunikatu.
-2,5. Obsługa wywalania się odpowiednich funkcji
-3. Jaki ma być MAX_DATA? Co jeśli nie starczy pamięci?
-5. Zamienić funkcję get_peer_address na taką, która przyjmuje wskaźnik do struct sockaddr_in, a nie zwraca te strukture.
+2,5. Obsługa wywalania się odpowiednich funkcji0
+3. Jaki ma być MAX_DATA (rozmiar bufora)? Co jeśli nie starczy miejsca na odbierane/przesyłane dane? Czy może takie coś zaistnieć?
 6. Zamykanie gniazda w przypadku błędu.
-7. uint8_t czy unsigned char?
 9. Sprawdzić wszystkie inet_*, w szczególności inet_pton i konwertowanie tych adresów do różnych form
 10. W sumie to te makra można zamienić na enum.
 1.1.2 Co jeśli u starego węzła nie starcza miejsca na nowego? Problem jest też taki, że establish_connection u starego robimy na końcu handle_hello.
@@ -133,6 +125,28 @@ Wspomnieć, że niektóre ify są dla "extensibility".
     ODP: < 1 ms
 (6) Czy węzeł może być zsynchronizowany z więcej niż jednym peer-em naraz?
     ODP: Nie
+(7) Czy należy ignorować komunikaty inne niż DELAY_RESPONSE odebrane pomiędzy SYNC_START a DELAY_RESPONSE?
+    + Synchronizacja to serce programu, najważniejsza procedura. Musimy poprawnie nawiązać połączenie i nie zważać na to, co dzieje się naokoło
+    - Musimy odpowiedzieć na chociażby GET_TIME niezależnie od okoliczności
+    - To wydaje się absurdalne ze strony dołączającego z atrybutami ar, że wysyła HELLO i zostaje odrzucony.
+        No bo skąd dołączający ma wiedzieć, że odbiorca HELLO aktualnie coś robi?
+    ODP: Nie, nie należy ignorować komunikatów innych niż DELAY_RESPONSE odebranych pomiędzy SYNC_START a DELAY_RESPONSE.
+        To ma swoje konsekwencje ...
+        Oczywiście są wyjatki od reguły: jeśli w tej fazie otrzymamy komunikat SYNC_START, to powinniśmy go zignorować.
+        Nie chcemy bowiem, żeby jakiś impostor przerwał istniejący już proces synchronizacji.
+(8) Jak dokładnie działa setsockopt?
+    1. Jak obsługuje się timeout i jak w ogóle wiedzieć, że timeout nastąpił?
+        ODP: Gdy następuje timeout, wynikiem recfrom jest -1,
+        zaś errno zostaje ustawione na EAGAIN lub EWOULDBLOCK (w zalezności od OS).
+    2. Czy ten czas liczony jest cały czas, również podczas wykonywania jakichś operacji, czy tylko podczas oczekiwania?
+        ODP: Tylko podczas oczekiwania.
+    3. Czy timeout obowiązuje jedynie na jeden recvfrom, czy też na cały program lub do czasu zmiany?
+        ODP: Jedynie na jeden recvfrom
+            Musimy więc po zakończeniu recvfrom ponownie ustawiać odpowiedni timeout.
+7. uint8_t czy unsigned char?
+    ODP: Chyba obojętnie, lecz używajmy uint8_t.
+
+
 
 ---- ZROBIONE ----
 0.1. Jak w końcu to HELLO_REPLY, jak z innymi? Czy zrobić jakąś klasę i podklasy, tak jak we Futureach? TAK
@@ -143,5 +157,7 @@ Wspomnieć, że niektóre ify są dla "extensibility".
 0. Sprawdzić w connect i ack_connect, czy nie znamy już tego węzła. DONE
 1.2.2. Na wszelki zapisać globalnie swoj adres oraz port. DONE, bo przecież jest w ProgramArgs
 -. Aktualnie "zaniedbujemy" g_buf: nie zerujemy go przed read-em, nie ustawiamy koncowych bajtow na 0. DONE
+5. Zamienić funkcję get_peer_address na taką, która przyjmuje wskaźnik do struct sockaddr_in, a nie zwraca te strukture. DONE
+
 
 

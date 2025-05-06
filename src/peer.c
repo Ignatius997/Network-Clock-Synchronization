@@ -22,10 +22,10 @@
  * - `count`   : The current number of peers stored in the `peers` array.
  *
  * Notes:
- * - If `count` reaches the value of `PEER_MAX`, no more peers can be added.
+ * - If `count` reaches the value of `PEER_MAX_COUNT`, no more peers can be added.
  */
 typedef struct {
-    Peer peers[PEER_MAX];
+    Peer peers[PEER_MAX_COUNT];
     uint16_t count;
 } PeerManager;
 
@@ -74,7 +74,7 @@ void peer_add(const Peer *p) {
         syserr("Too many peers"); // TODO czy może coś innego zrobić.
     }
 
-    if (peer_manager.count == PEER_MAX) limit_reached = true;
+    if (peer_manager.count == PEER_MAX_COUNT) limit_reached = true;
 
     memcpy(&peer_manager.peers[peer_manager.count++], p, sizeof(Peer));
 }

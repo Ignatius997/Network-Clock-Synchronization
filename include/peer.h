@@ -5,7 +5,7 @@
 #include <arpa/inet.h>
 #include <stdint.h>
 
-#define PEER_MAX UINT16_MAX // Max amount of peers
+#define PEER_MAX_COUNT UINT16_MAX // Max amount of peers
 
 /** Structure representing peer.
  * `peer_port` field is *always* held in network order.

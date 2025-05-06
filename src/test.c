@@ -14,7 +14,7 @@ void test_peer_find_time(void) {
         Peer p = {
             .peer_address_length = 4,
             .peer_address = {0},
-            .peer_port = htons(PEER_MAX),
+            .peer_port = htons(PEER_MAX_COUNT),
         };
         peer_add(&p);
 
@@ -28,7 +28,7 @@ void test_peer_find_time(void) {
 
     struct sockaddr_in s = {
         .sin_family = AF_INET,
-        .sin_port = htons(PEER_MAX),
+        .sin_port = htons(PEER_MAX_COUNT),
         .sin_addr.s_addr = htonl(1), // NOTE Shady.
     };
     Peer *p = peer_find(&s);

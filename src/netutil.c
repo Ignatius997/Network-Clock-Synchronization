@@ -36,33 +36,44 @@ static void _init_addr(struct sockaddr_in *bind_address, const char *addr,
     bind_address->sin_port = htons(port);
 }
 
+/*
+ * Function assumes recvfrom did not fail.
+ * Returns 0 on success, -1 on failure.
+*/
 static int _validate_address(const struct sockaddr_in *addr) {
     // NOTE czy powinniśmy to w ogóle walidować?
     if (addr->sin_family != AF_INET) {
         syserr("Invalid address family"); // Nie powinno się wywalać
-        return 1;
+        return -1;
     }
 
     return 0;
 }
 
+/**
+ * Returns 0 on success, -1 on failure.
+*/
 static int _validate_received_length(const ssize_t recv_len) {
     // NOTE Program nie powinien się wywalać przy jednym złym receive, ale początkowo tak zróbmy dla świętego spokoju i debugowania
     Message *msg = (Message *)ncs_buf;
 
     if (recv_len < 0) {
-        syserr("recvfrom failed"); // NOTE nie powinno się wywalać
-        return 1;
+        fprintf(stderr, "recvfrom fail or timeout\n");
+        return -1;
     }
 
     if (recv_len < (ssize_t) msg_size(msg)) {
         syserr("recvfrom less bytes than message size."); // Można dodać rodzaj msg
-        return 1;
+        return -1;
     }
 
     return 0;
 }
 
+/**
+ * Function assumes recvfrom did not fail.
+ * Returns 0 on success, -1 on failure.
+*/
 static int _validate_peer(const Peer *p) {
     if (p->peer_address_length != NUTIL_IPV4_ADDR_LEN) {
         syserr("Received incorrect peers"); // NOTE ofc nie powinno się wywalać
@@ -72,7 +83,11 @@ static int _validate_peer(const Peer *p) {
     return 0;
 }
 
-/** Function does not assume, that there are any peers to validate in `ncs_buf`. */
+/**
+ * Function assumes recvfrom did not fail.
+ * Function does not assume, that there are any peers to validate in `ncs_buf`.
+ * Returns 0 on success, -1 on failure.
+ */
 static int _validate_peers() {
     Message *msg = (Message *)ncs_buf;
 
@@ -85,7 +100,7 @@ static int _validate_peers() {
             fprintf(stderr, "Validating peers:\n");
             for (size_t i = 0; i < peers_count; ++i) {
                 Peer *p = (Peer *) (ncs_buf + offset);
-                if (_validate_peer(p) != 0) return 1; // Failure
+                if (_validate_peer(p) != 0) return -1;
                 offset += sizeof(Peer);
             }
         }
@@ -175,13 +190,16 @@ void nutil_establish_connection(const struct sockaddr_in *peer_address) {
     peer_add(&p);
 }
 
+/**
+ * Returns recv_len on success, -1 on failure.
+ */
 int nutil_validate_received_data(const struct sockaddr_in *peer_address,
                                  const ssize_t recv_len) {
-    int ret = _validate_received_length(recv_len);
-    if (ret == 0) ret = _validate_address(peer_address);
-    if (ret == 0) ret = _validate_peers();
+    int val = _validate_received_length(recv_len);
+    if (val != -1) val = _validate_address(peer_address);
+    if (val != -1) val = _validate_peers();
 
-    return ret;
+    return val != -1 ? recv_len : val;
 }
 
 /**

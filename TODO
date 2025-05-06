@@ -6,12 +6,14 @@ TODO Workflow głównej pętli z kontrolą czasu
     Zakończenie czekania
     1. Wiadomość
         - Zareaguj na wiadomość
+        - Ustaw odpowiedni timeout
     2. Timeout
         - Zareaguj na timeout w zależności od tego, w jakiej fazie jesteś:
             1. Oczekiwanie na SYNC_START od Wybrańca:
                 Usuń informacje o synchronizacji z Wybrańcem.
             2. Oczekiwanie na DELAY_RESPONSE od SSnadawcy:
                 Zaniechaj dalszej synchronizacji
+            ...
 
 TODO 2. Jak nie przekroczyć czasu oczekiwania na komunikat?
     Można po każdym odebranym komunikacie (lub timeoucie) sprawdzać, czy czas nie został przekroczony dla jakiegoś zsynchronizowanego peera

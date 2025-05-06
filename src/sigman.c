@@ -13,7 +13,6 @@
 static void sig_handle_sigint(int sig) {
     fprintf(stderr, "\nCaught signal %d (SIGINT). Closing socket and exiting...\n", sig);
     g_close_socket();
-    peer_free_all();
     exit(130);
 }
 
@@ -24,7 +23,6 @@ static void sig_handle_quit(int sig) {
     }
     fprintf(stderr, "\n");
     g_close_socket();
-    peer_free_all();
     exit(1);
 }
 

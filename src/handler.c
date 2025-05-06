@@ -2,20 +2,22 @@
 #include <string.h>
 #include <stdlib.h>
 
-#include "../include/nethandle.h"
-#include "../include/netsend.h"
+#include "../include/handler.h"
+#include "../include/send.h"
+#include "../include/sync.h"
 #include "../include/netutil.h"
 #include "../include/recvinfo.h"
 #include "../include/loglib.h"
 #include "../include/message.h"
 #include "../include/peer.h"
+#include "../include/timeoutman.h"
 #include "../include/err.h" // FIXME Później do wywałki
 
 static void _hello(const HelloReceiveInfo *h_rinfo) {
     SendInfo sinfo = {
         .peer_address = h_rinfo->base.peer_address,
     };
-    nsend_hello_reply(&sinfo);
+    send_hello_reply(&sinfo);
 
     if (!sinfo.known) {
         nutil_establish_connection(&h_rinfo->base.peer_address);
@@ -38,7 +40,7 @@ static void _hello_reply(const HelloReplyReceiveInfo *hr_rinfo) {
         for (uint16_t i = 0; i < peers_count; ++i) {
             SendInfo sinfo = {.len = -1};
             nutil_extract_address(&peers[i], &sinfo.peer_address);
-            nsend_connect(&sinfo);
+            send_connect(&sinfo);
         }
 
         free(peers);
@@ -54,7 +56,7 @@ static void _connect(const ConnectReceiveInfo *c_rinfo) {
         .peer_address = c_rinfo->base.peer_address,
         .len = -1,
     };
-    nsend_ack_connect(&sinfo);
+    send_ack_connect(&sinfo);
 }
 
 static void _ack_connect(const AckConnectReceiveInfo *ac_rinfo) {
@@ -93,7 +95,7 @@ static void _time(const TimeReceiveInfo *info) {
     // TODO: Implement this function
 }
 
-void nhandle_message(const struct sockaddr_in *peer_address, const ssize_t recv_len) {
+void handle_message(const struct sockaddr_in *peer_address, const ssize_t recv_len) {
     Message *msg = msg_load(); // Interpret data as a Message structure.
     
     if (!msg_allows_unknown_sender(msg) &&
@@ -152,4 +154,23 @@ void nhandle_message(const struct sockaddr_in *peer_address, const ssize_t recv_
 
     free(msg);
     rinfo_free(rinfo);
+}
+
+/**
+ * Handle -1 being return value of `recvfrom`, meaning either error or timeout.
+ */
+void handle_recv_fail(const struct sockaddr_in *peer_address) {
+    switch (sync_get_expected_message()) {
+        case MSG_SYNC_START:
+            sync_reset(peer_address);
+            break;
+        
+        case MSG_DELAY_REQUEST:
+        case MSG_DELAY_RESPONSE:
+            timeout_delay();
+            break;
+        
+        default:
+            break;
+    }
 }

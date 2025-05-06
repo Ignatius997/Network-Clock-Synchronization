@@ -17,9 +17,7 @@ typedef struct __attribute__((__packed__)) {
 } Peer;
 
 // Funkcje do zarządzania peerami
-void peer_cleanup(void); // Zwolnienie pamięci związanej z peerami
 void peer_add(const Peer *p); // Dodanie nowego peera
-void peer_free_all(void);
 
 Peer*   peer_find(const struct sockaddr_in *peer_address); // Znalezienie peera na podstawie adresu
 ssize_t peer_index(const Peer *p);

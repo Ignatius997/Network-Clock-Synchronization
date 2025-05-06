@@ -18,7 +18,7 @@ void test_peer_find_time(void) {
         };
         peer_add(&p);
 
-        if (++i == PEER_MAX) break;
+        if (++i == PEER_MAX_COUNT) break;
     } fprintf(stderr, "i=%" PRIu16 "\n", i);
 
     clk_update_tmp();

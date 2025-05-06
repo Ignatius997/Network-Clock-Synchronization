@@ -32,43 +32,6 @@ typedef struct {
 static PeerManager peer_manager = {0};
 static bool limit_reached = false; // Tells, whether limit in `peers` table has been reached
 
-/**
- * SyncManager
- *
- * A structure responsible for managing synchronization information for the node.
- * It tracks the synchronization level and the timestamp of the last synchronization
- * with a peer in the P2P network.
- *
- * Fields:
- * - `sync_id`        : The index of the peer in the `peers` array with which the node is synchronized.
- *                      This value is irrelevant if `sync_lvl` equals 255, indicating no synchronization.
- * - `sync_lvl`       : Synchronization level, stored in network byte order.
- *                      A value of 255 indicates no synchronization.
- * - `sync_timestamp` : The value of `ncs_natural_clock` at the moment of the last
- *                      synchronization, stored in host byte order. This field is
- *                      irrelevant if `sync_lvl` equals 255.
- *
- * Notes:
- * - This structure is initialized automatically using the `_init_sync_manager` function.
- */
-typedef struct {
-    uint16_t sync_id;
-    uint16_t sync_lvl;
-    uint64_t sync_timestamp;
-} SyncManager;
-
-static SyncManager sync_man = {0};
-
-__attribute__((constructor)) static void _init_sync_manager() {
-    sync_man.sync_lvl = htons(255);
-}
-
-// TODO Delete - static table.
-void peer_cleanup(void) {
-    peer_manager.count = 0;
-    peer_manager.capacity = 0;
-}
-
 void peer_add(const Peer *p) {
     if (peer_manager.count == 0 && limit_reached) { // Sleek.
         syserr("Too many peers"); // TODO czy może coś innego zrobić.
@@ -77,11 +40,6 @@ void peer_add(const Peer *p) {
     if (peer_manager.count == PEER_MAX_COUNT) limit_reached = true;
 
     memcpy(&peer_manager.peers[peer_manager.count++], p, sizeof(Peer));
-}
-
-// TODO Delete - static table.
-void peer_free_all(void) {
-    // free(peer_manager.peers); // NOTE Invalid for static table.
 }
 
 /** O(peer_manager.count)

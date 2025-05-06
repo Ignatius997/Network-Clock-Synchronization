@@ -1,5 +1,5 @@
-#ifndef NETSEND_H
-#define NETSEND_H
+#ifndef NCS_SEND_H
+#define NCS_SEND_H
 
 #include <arpa/inet.h>
 #include <inttypes.h>
@@ -14,9 +14,9 @@ typedef struct {
     // NOTE Szczerze to pole `known` nie powinno się tu znajdować.
 } SendInfo;
 
-void nsend_hello(SendInfo *sinfo);
-void nsend_hello_reply(SendInfo *sinfo);
-void nsend_connect(SendInfo *sinfo);
-void nsend_ack_connect(SendInfo *sinfo);
+void send_hello(SendInfo *sinfo);
+void send_hello_reply(SendInfo *sinfo);
+void send_connect(SendInfo *sinfo);
+void send_ack_connect(SendInfo *sinfo);
 
-#endif // NETSEND_H
+#endif // NCS_SEND_H

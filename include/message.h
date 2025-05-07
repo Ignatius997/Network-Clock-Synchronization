@@ -5,6 +5,8 @@
 #include <stdbool.h>
 #include <stddef.h>
 
+/** `MSG_NONE` stands for no message, somewhat like NULL being pointer to "nothing". */
+#define MSG_NONE            0
 #define MSG_HELLO           1
 #define MSG_HELLO_REPLY     2
 #define MSG_CONNECT         3
@@ -16,7 +18,7 @@
 #define MSG_GET_TIME        31
 #define MSG_TIME            32
 
-#define MSG_MAX       255
+#define MSG_MAX_VALUE       255
 
 // NOTE Trzymamy wszystko w big endianess.
 typedef struct __attribute__((__packed__)) {

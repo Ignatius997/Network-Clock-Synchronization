@@ -42,10 +42,6 @@ void peer_add(const Peer *p) {
     memcpy(&peer_manager.peers[peer_manager.count++], p, sizeof(Peer));
 }
 
-/** O(peer_manager.count)
- * We do not have to worry about infinite loop caused by `<=` check in for loop condition,
- * because size_t exceeds `peer_manager.count` type limit by far.
-*/
 Peer* peer_find(const struct sockaddr_in *peer_address) {
     uint16_t port = peer_address->sin_port;
     uint32_t addr = peer_address->sin_addr.s_addr;
@@ -75,24 +71,25 @@ const Peer* peer_get_all(void) {
 }
 
 void peer_print(const Peer *p) {
-    if (p == NULL) {
-        fprintf(stderr, "Peer is NULL.\n");
-        return;
-    }
+    #ifndef NDEBUG
+        if (p == NULL) {
+            fprintf(stderr, "Peer is NULL.\n");
+            return;
+        }
 
-    fprintf(stderr, "Peer %p:\n", (void*) p);
-    fprintf(stderr, "  Address Length: %u\n", p->peer_address_length);
-    fprintf(stderr, "  Address: ");
-    for (uint8_t i = 0; i < p->peer_address_length; ++i) {
-        fprintf(stderr, "%s%u", (i > 0 ? "." : ""), p->peer_address[i]);
-    }
-    fprintf(stderr, "\n");
-    fprintf(stderr, "  Port: %u\n", ntohs(p->peer_port));
+        fprintf(stderr, "Peer %p:\n", (void*) p);
+        fprintf(stderr, "  Address Length: %u\n", p->peer_address_length);
+        fprintf(stderr, "  Address: ");
+        for (uint8_t i = 0; i < p->peer_address_length; ++i) {
+            fprintf(stderr, "%s%u", (i > 0 ? "." : ""), p->peer_address[i]);
+        }
+        fprintf(stderr, "\n");
+        fprintf(stderr, "  Port: %u\n", ntohs(p->peer_port));
+    #endif // NDEBUG
 }
 
 void peer_all_print(const Peer *peers) {
     for (size_t i = 0; i < peer_manager.count; ++i) {
         peer_print(&peers[i]);
     }
-    fprintf(stderr, "\n");
 }

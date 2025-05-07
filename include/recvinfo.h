@@ -11,8 +11,8 @@
 // Żeby specified load działał fajnie,
 
 typedef struct {
-    uint8_t message; // NOTE raczej tylko type, nie cały message
-    struct sockaddr_in peer_address; // Wartosci w tym trzymane sa w porzadku sieciowym
+    uint8_t message;
+    struct sockaddr_in peer_address; // fields held in network order.
 } ReceiveInfo;
 
 typedef struct {

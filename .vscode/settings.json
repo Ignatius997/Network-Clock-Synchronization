@@ -16,6 +16,7 @@
         "wait.h": "c",
         "unistd.h": "c",
         "stdint.h": "c",
-        "send.h": "c"
+        "send.h": "c",
+        "system_error": "c"
     }
 }

@@ -11,7 +11,7 @@
 #include "../include/err.h"
 
 // Tablica przechowująca informacje o ReceiveInfo dla każdego typu wiadomości
-static size_t recv_info_size[MSG_MAX + 1];
+static size_t recv_info_size[MSG_MAX_VALUE + 1];
 
 // Funkcja ustawiająca rozmiary struktur ReceiveInfo
 static void _set_recv_info_size(void) {

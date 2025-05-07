@@ -10,7 +10,7 @@
 #include "../include/globals.h"
 #include "../include/err.h"
 
-static MessageInfo msg_info[MSG_MAX+1];
+static MessageInfo msg_info[MSG_MAX_VALUE+1];
 
 static void _set_info_size(void) {
     msg_info[MSG_HELLO].size          = sizeof(HelloMessage);

@@ -2,6 +2,18 @@
 NOTE Wybraniec to ten, z którym węzeł jest zsynchronizowany.
 NOTE SSnadawca to skrót od nadawcy SYNC_START.
 
+Aktualnie: Poprawny mechanizm odbierania wiadomości pod kątem synchronizacji.
+
+Mechanizm odbierania wiadomości DONE
+Mechanizm reagowania na timeout TODO
+
+TODO Czy wszystkie warunki odebranych wiadomości należy sprawdzać w nutil_validate_received_data czy też już w handle?
+    W nutil powinny znajdywać się raczej funkcje, które nie sprawdzają, czy dane są zgodne ze szczegółową specyfikacją,
+    by można było wykonać odpowiednie operacje (e.g. czy wartość synchronized w SYNC_START jest mniejsza niż 255),
+    lecz czy dane mają prawo bytu: Czy długość adresu jest poprawna, czy ilość peerów w HELLO_REPLY zgadza się z polem
+    count w komunikacie. Wtedy bowiem cały komunikat jest BŁĘDNY. W pierwszym przykładzie natomiast jest on jedynie
+    IGNOROWANY.
+
 TODO Workflow głównej pętli z kontrolą czasu
     Zakończenie czekania
     1. Wiadomość

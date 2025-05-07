@@ -29,6 +29,7 @@
 #include "../include/globals.h"
 #include "../include/clockman.h"
 #include "../include/test.h"
+#include "../include/sync.h"
 
 // NOTE Tak naprawdę nie są to żadne fazy programu, lecz momenty do timeoutów
 // NOTE Widać, że potrzebujemy biblioteki do timeout-ów
@@ -93,6 +94,7 @@ int main(int argc, char* argv[]) {
     struct sockaddr_in bind_address; // To avoid allocation on the stack.
     nutil_init_socket(&bind_address, program_args.bind_address, program_args.port);
     
+    sync_set_exp_msg(MSG_NONE);
     join_network(&program_args);
     listen_for_messages();
     

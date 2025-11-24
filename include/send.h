@@ -18,5 +18,11 @@ void send_hello(SendInfo *sinfo);
 void send_hello_reply(SendInfo *sinfo);
 void send_connect(SendInfo *sinfo);
 void send_ack_connect(SendInfo *sinfo);
+void send_sync_start(SendInfo *sinfo, uint8_t synchronized, uint64_t timestamp);
+void send_delay_request(SendInfo *sinfo);
+void send_delay_response(SendInfo *sinfo, uint8_t synchronized, uint64_t timestamp);
+void send_get_time(SendInfo *sinfo);
+void send_time(SendInfo *sinfo, uint8_t synchronized, uint64_t timestamp);
+void send_leader(SendInfo *sinfo, uint8_t synchronized);
 
 #endif // NCS_SEND_H

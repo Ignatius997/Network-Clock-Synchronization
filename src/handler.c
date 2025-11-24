@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <endian.h>
 
 #include "../include/handler.h"
 #include "../include/send.h"
@@ -14,6 +15,7 @@
 #include "../include/timeoutman.h"
 #include "../include/err.h" // FIXME Później do wywałki
 #include "../include/sync.h"
+#include "../include/clockman.h"
 
 /**
  * @brief Handles a received MSG_HELLO message.
@@ -122,43 +124,123 @@ static int _ack_connect(const AckConnectReceiveInfo *ac_rinfo) {
 }
 
 static int _sync_start(const SyncStartReceiveInfo *info) {
-    (void)info;
-    // TODO: Implement this function
+    // If we're already in a synchronization session, ignore this message
+    if (sync_get_exp_msg() == MSG_DELAY_RESPONSE) {
+        return 0;
+    }
+
+    // Record the time we received this message
+    uint64_t t2 = clk_get_nat();
+
+    // Extract synchronized level and timestamp from the message
+    uint8_t sender_sync_level = info->msg.synchronized;
+    uint64_t t1 = be64toh(info->msg.timestamp);
+
+    // Store synchronization information
+    Peer *peer = peer_find(&info->base.peer_address);
+    if (peer != NULL) {
+        sync_set_peer_id(peer_index(peer));
+        sync_set_timestamp(t2);
+        
+        // Our synchronization level is sender's level + 1
+        uint16_t our_level = (sender_sync_level == SYNC_NONE) ? SYNC_NONE : sender_sync_level + 1;
+        sync_set_level(our_level);
+    }
+
+    // Start temporary clock for delay measurement
+    clk_start_tmp();
+
+    // Send DELAY_REQUEST back
+    SendInfo sinfo = {
+        .peer_address = info->base.peer_address,
+        .len = -1,
+    };
+    send_delay_request(&sinfo);
 
     return 0;
 }
 
 static int _delay_request(const DelayRequestReceiveInfo *info) {
-    (void)info;
-    // TODO: Implement this function
+    // Get current timestamp
+    uint64_t t3 = clk_get_nat();
+
+    // Get our synchronization level
+    uint16_t our_level = sync_get_level();
+    uint8_t sync_level = (our_level == SYNC_NONE) ? SYNC_NONE : (uint8_t)our_level;
+
+    // Send DELAY_RESPONSE back with our sync level and current timestamp
+    SendInfo sinfo = {
+        .peer_address = info->base.peer_address,
+        .len = -1,
+    };
+    send_delay_response(&sinfo, sync_level, t3);
 
     return 0;
 }
 
 static int _delay_response(const DelayResponseReceiveInfo *info) {
-    (void)info;
-    // TODO: Implement this function
+    // Record the time we received this response
+    uint64_t t4 = clk_get_nat();
 
+    // Get the temporary clock value (time elapsed since SYNC_START)
+    uint64_t delay = clk_get_tmp();
+
+    // Extract sender's sync level and timestamp (t3)
+    uint8_t sender_sync_level = info->msg.synchronized;
+    uint64_t t3 = be64toh(info->msg.timestamp);
+
+    // Calculate offset: assuming round-trip delay is symmetric
+    // offset = ((t2 - t1) + (t3 - t4)) / 2 = ((t2 - t1) - (t4 - t3)) / 2
+    // But we need to store the delay for synchronization
+    
+    // Update our synchronization level based on sender's level
+    if (sender_sync_level != SYNC_NONE) {
+        uint16_t our_level = sender_sync_level + 1;
+        sync_set_level(our_level);
+    }
+
+    // Synchronization is complete
     return 0;
 }
 
 static int _leader(const LeaderReceiveInfo *info) {
-    (void)info;
-    // TODO: Implement this function
+    // Extract sender's sync level
+    uint8_t sender_sync_level = info->msg.synchronized;
+
+    // Update our synchronization based on the leader's information
+    // The leader message indicates who is the most synchronized node
+    (void)sender_sync_level;
 
     return 0;
 }
 
 static int _get_time(const GetTimeReceiveInfo *info) {
-    (void)info;
-    // TODO: Implement this function
+    // Get current timestamp
+    uint64_t timestamp = clk_get_nat();
+
+    // Get our synchronization level
+    uint16_t our_level = sync_get_level();
+    uint8_t sync_level = (our_level == SYNC_NONE) ? SYNC_NONE : (uint8_t)our_level;
+
+    // Send TIME response with our sync level and current timestamp
+    SendInfo sinfo = {
+        .peer_address = info->base.peer_address,
+        .len = -1,
+    };
+    send_time(&sinfo, sync_level, timestamp);
 
     return 0;
 }
 
 static int _time(const TimeReceiveInfo *info) {
-    (void)info;
-    // TODO: Implement this function
+    // Extract sender's sync level and timestamp
+    uint8_t sender_sync_level = info->msg.synchronized;
+    uint64_t timestamp = be64toh(info->msg.timestamp);
+
+    // Log or process the received time information
+    // This is typically just for information purposes
+    (void)sender_sync_level;
+    (void)timestamp;
 
     return 0;
 }

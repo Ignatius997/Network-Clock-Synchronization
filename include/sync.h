@@ -21,6 +21,12 @@ void    sync_set_exp_msg(const uint8_t msg);
  */
 void sync_update_exp_msg(const Message *msg);
 
-void sync_cancel(void);
+void     sync_cancel(void);
+uint16_t sync_get_level(void);
+void     sync_set_level(uint16_t level);
+uint16_t sync_get_peer_id(void);
+void     sync_set_peer_id(uint16_t id);
+uint64_t sync_get_timestamp(void);
+void     sync_set_timestamp(uint64_t timestamp);
 
 #endif // NCS_SYNC_H

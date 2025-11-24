@@ -98,3 +98,60 @@ void send_ack_connect(SendInfo *sinfo) {
 
     _send_message(sinfo, (Message *)&msg);
 }
+
+void send_sync_start(SendInfo *sinfo, uint8_t synchronized, uint64_t timestamp) {
+    SyncStartMessage msg = {
+        .base.message = MSG_SYNC_START,
+        .synchronized = synchronized,
+        .timestamp = htobe64(timestamp)
+    };
+
+    sinfo->len = -1;
+    _send_message(sinfo, (Message *)&msg);
+}
+
+void send_delay_request(SendInfo *sinfo) {
+    DelayRequestMessage msg = {.base.message = MSG_DELAY_REQUEST};
+
+    sinfo->len = -1;
+    _send_message(sinfo, (Message *)&msg);
+}
+
+void send_delay_response(SendInfo *sinfo, uint8_t synchronized, uint64_t timestamp) {
+    DelayResponseMessage msg = {
+        .base.message = MSG_DELAY_RESPONSE,
+        .synchronized = synchronized,
+        .timestamp = htobe64(timestamp)
+    };
+
+    sinfo->len = -1;
+    _send_message(sinfo, (Message *)&msg);
+}
+
+void send_get_time(SendInfo *sinfo) {
+    GetTimeMessage msg = {.base.message = MSG_GET_TIME};
+
+    sinfo->len = -1;
+    _send_message(sinfo, (Message *)&msg);
+}
+
+void send_time(SendInfo *sinfo, uint8_t synchronized, uint64_t timestamp) {
+    TimeMessage msg = {
+        .base.message = MSG_TIME,
+        .synchronized = synchronized,
+        .timestamp = htobe64(timestamp)
+    };
+
+    sinfo->len = -1;
+    _send_message(sinfo, (Message *)&msg);
+}
+
+void send_leader(SendInfo *sinfo, uint8_t synchronized) {
+    LeaderMessage msg = {
+        .base.message = MSG_LEADER,
+        .synchronized = synchronized
+    };
+
+    sinfo->len = -1;
+    _send_message(sinfo, (Message *)&msg);
+}

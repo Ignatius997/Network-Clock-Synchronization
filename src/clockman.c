@@ -50,3 +50,13 @@ void clk_print_nat(void) {
 void clk_print_tmp(void) {
     fprintf(stderr, "temporary clock: %" PRIu64 " ms\n", temporary_clock);
 }
+
+uint64_t clk_get_nat(void) {
+    clk_update_nat();
+    return natural_clock;
+}
+
+uint64_t clk_get_tmp(void) {
+    clk_update_tmp();
+    return temporary_clock;
+}

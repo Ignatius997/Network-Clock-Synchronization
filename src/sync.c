@@ -100,3 +100,27 @@ void sync_update_exp_msg(const Message *msg) {
 void sync_cancel(void) {
     sync_man.lvl = htons(SYNC_NONE);
 }
+
+uint16_t sync_get_level(void) {
+    return ntohs(sync_man.lvl);
+}
+
+void sync_set_level(uint16_t level) {
+    sync_man.lvl = htons(level);
+}
+
+uint16_t sync_get_peer_id(void) {
+    return sync_man.id;
+}
+
+void sync_set_peer_id(uint16_t id) {
+    sync_man.id = id;
+}
+
+uint64_t sync_get_timestamp(void) {
+    return sync_man.timestamp;
+}
+
+void sync_set_timestamp(uint64_t timestamp) {
+    sync_man.timestamp = timestamp;
+}
